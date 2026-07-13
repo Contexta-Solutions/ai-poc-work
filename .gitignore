@@ -28,6 +28,9 @@ lerna-debug.log*
 # Personal reference docs (not app code)
 ortho templates_6699.md
 
+# Local AI-assistant project notes (not shared with the team)
+CLAUDE.md
+
 # Editor / OS
 .vscode/*
 !.vscode/extensions.json
