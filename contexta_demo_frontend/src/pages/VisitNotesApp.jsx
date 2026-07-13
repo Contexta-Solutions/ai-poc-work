@@ -259,6 +259,10 @@ export default function VisitNotesApp() {
           const ext = mimeType.includes('webm') ? 'webm' : mimeType.includes('ogg') ? 'ogg' : 'mp4';
           const formData = new FormData();
           formData.append('file', audioBlob, `recording.${ext}`);
+          // Clinical dictation is English-only. Pin the language instead of
+          // letting Whisper auto-detect (the ChatBot does auto-detect, since
+          // patients there speak English or Telugu).
+          formData.append('language', 'en');
 
           const res = await fetch(`${API_URL}/api/transcribe`, {
             method: 'POST',

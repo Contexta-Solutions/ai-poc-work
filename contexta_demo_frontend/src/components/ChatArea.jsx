@@ -18,16 +18,23 @@ const formatMessage = (text) => {
   });
 };
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || '';
+
 export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMode, onNewPatient }) {
   const [inputValue, setInputValue] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
-  
+
   const messagesEndRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const textareaRef = useRef(null);
   const justTranscribedRef = useRef(false);
+  // Language Whisper heard on the last voice message ("en" / "te"). Sent along
+  // with the chat request so the assistant answers in the language the patient
+  // actually spoke, instead of guessing from the text. Sticks until the next
+  // voice message changes it; null for a text-only conversation.
+  const detectedLanguageRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -70,13 +77,15 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
       textareaRef.current.style.height = 'auto';
     }
 
-    const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || '';
-
     try {
       const response = await fetch(`${BACKEND_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userText, history: historyPayload })
+        body: JSON.stringify({
+          message: userText,
+          history: historyPayload,
+          language: detectedLanguageRef.current
+        })
       });
       
       const data = await response.json();
@@ -126,19 +135,37 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const formData = new FormData();
         formData.append("file", audioBlob, "audio.webm");
-        formData.append("model", "whisper-large-v3-turbo");
-        formData.append("language", "te");
+        // No `language` field: let Whisper auto-detect so the patient can speak
+        // English or Telugu without setting anything. The backend tells us which
+        // it heard. (Transcription goes through the backend rather than straight
+        // to Groq, so the API key never ships to the browser.)
 
         try {
-          const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+          const res = await fetch(`${BACKEND_URL}/api/transcribe`, {
             method: "POST",
-            headers: {
-              "Authorization": `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`
-            },
             body: formData
           });
+
+          if (!res.ok) {
+            let detail = `Transcription failed (${res.status})`;
+            try {
+              const err = await res.json();
+              detail = err.detail || detail;
+            } catch {
+              // response wasn't JSON; keep the status-code message
+            }
+            throw new Error(detail);
+          }
+
           const data = await res.json();
-          if (data.text) {
+
+          // null when Whisper heard something that isn't English or Telugu --
+          // keep whatever language the conversation was already in.
+          if (data.language) {
+            detectedLanguageRef.current = data.language;
+          }
+
+          if (data.text && data.text.trim()) {
             setInputValue(prev => prev + (prev ? " " : "") + data.text.trim());
             justTranscribedRef.current = true;
             if (textareaRef.current) {
@@ -149,10 +176,14 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
             }
           }
         } catch (error) {
-          console.error("Groq Transcription Error:", error);
+          console.error("Transcription error:", error);
+          setMessages(prev => [...prev, {
+            id: Date.now(), text: ` Sorry, I couldn't hear that — please try again or type your message.`, sender: 'bot',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }]);
         } finally {
           setIsProcessingAudio(false);
-          stream.getTracks().forEach(track => track.stop()); 
+          stream.getTracks().forEach(track => track.stop());
         }
       };
 
