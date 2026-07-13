@@ -9,9 +9,74 @@ from chat_service import generate_claude_response
 
 router = APIRouter()
 
+# Telugu block in Unicode. Used to decide which language the system's own
+# booking confirmation should be written in, so a Telugu conversation doesn't
+# end with an English receipt stapled to it.
+_TELUGU_SCRIPT = re.compile(r'[ఀ-౿]')
+
+_BOOK_TAG = re.compile(r'<BOOK>(.*?)\|(.*?)\|(.*?)\|(.*?)</BOOK>')
+_ANY_BOOK_TAG = re.compile(r'<BOOK>.*?</BOOK>', re.DOTALL)
+
+
 def _get_doctor_names():
     """Doctor names for mention-detection."""
     return [d["name"] for d in DOCTORS]
+
+
+def _confirmation_message(result: dict, in_telugu: bool) -> str:
+    slot = result["slot"]
+    if in_telugu:
+        return (
+            f"\n\n **అపాయింట్‌మెంట్ కన్ఫర్మ్ అయ్యింది!**"
+            f"\nDoctor: **{result['doctor']}**"
+            f"\nపేషెంట్: **{result['patient']}**"
+            f"\nతేదీ: **{result['date']}**"
+            f"\nస్లాట్: **{slot}** ({result['slot_time']})"
+            f"\nసమయం: **{result['time']}**"
+            f"\nటోకెన్: **{result['token']}**"
+            f"\n{slot} లో మిగిలిన స్లాట్‌లు: **{result['remaining']}**"
+            f"\n\nదయచేసి 10 నిమిషాలు ముందుగా రండి."
+        )
+    return (
+        f"\n\n **Appointment Confirmed!**"
+        f"\nDoctor: **{result['doctor']}**"
+        f"\nPatient: **{result['patient']}**"
+        f"\nDate: **{result['date']}**"
+        f"\nSlot: **{slot}** ({result['slot_time']})"
+        f"\nExact Time: **{result['time']}**"
+        f"\nToken: **{result['token']}**"
+        f"\nRemaining slots in {slot}: **{result['remaining']}**"
+        f"\n\nPlease arrive 10 minutes early."
+    )
+
+
+def _slot_full_message(result: dict, in_telugu: bool) -> str:
+    slot = result.get("slot", "")
+    availability = result.get("availability", "")
+    if in_telugu:
+        return (
+            f"\n\n **స్లాట్ నిండిపోయింది:** క్షమించండి, ఆ తేదీన **{slot}** స్లాట్ పూర్తిగా బుక్ అయ్యింది. "
+            f"దయచేసి వేరే స్లాట్ ఎంచుకోండి.\n\n{availability}"
+        )
+    return (
+        f"\n\n **Slot Full:** I apologize, but the **{slot}** slot on that date is fully booked "
+        f"for this doctor. Could you please select a different slot?\n\n{availability}"
+    )
+
+
+def _booking_failed_message(in_telugu: bool) -> str:
+    """The model emitted a <BOOK> tag we couldn't trust (bad doctor/slot/date).
+    Never book on a guess -- ask the patient to restate it."""
+    if in_telugu:
+        return (
+            "\n\n క్షమించండి, ఈ బుకింగ్ పూర్తి చేయలేకపోయాను. "
+            "దయచేసి డాక్టర్ పేరు, తేదీ మరియు స్లాట్ మరోసారి చెప్పండి."
+        )
+    return (
+        "\n\n Sorry — I couldn't complete that booking. "
+        "Could you please confirm the doctor, the date and the slot once more?"
+    )
+
 
 @router.post("/api/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
@@ -32,33 +97,38 @@ async def chat_endpoint(request: ChatRequest):
             target_date = date_match.group(1) if date_match else datetime.now().strftime("%Y-%m-%d")
             slot_availability = f"Doctor: {confirmed_doctor} | Date: {target_date}\n"
             slot_availability += get_slot_availability(confirmed_doctor, target_date)
-        
-        reply_text = generate_claude_response(request.message, db_state, request.history, slot_availability)
-        
-        match = re.search(r'<BOOK>(.*?)\|(.*?)\|(.*?)\|(.*?)</BOOK>', reply_text)
+
+        reply_text = generate_claude_response(
+            request.message, db_state, request.history, slot_availability, request.language
+        )
+
+        # Write the system's own confirmation in whatever language the assistant
+        # just replied in.
+        in_telugu = bool(_TELUGU_SCRIPT.search(reply_text))
+
+        match = _BOOK_TAG.search(reply_text)
         if match:
-            doc_name = match.group(1).strip()
-            slot = match.group(2).strip()
-            date_str = match.group(3).strip()
-            patient_name = match.group(4).strip()
-            
-            # Calling CRUD to generate token
+            doc_name, slot, date_str, patient_name = (g.strip() for g in match.groups())
+
             result = book_appointment(doc_name, slot, date_str, patient_name)
-            
-            if result["status"] == "success":
-                remaining = result.get("remaining", 0)
-                slot_name = result.get("slot", slot)
-                success_msg = f"\n\n **Appointment Confirmed!**\nDoctor: **{doc_name}**\nPatient: **{result['patient']}**\nDate: **{result['date']}**\nSlot: **{slot_name}** (9:00 AM – 12:00 PM / 1:00 PM – 4:00 PM / 6:00 PM – 9:00 PM)\nExact Time: **{result['time']}**\nToken: **{result['token']}**\nRemaining slots in {slot_name}: **{remaining}**\n\nPlease arrive 10 minutes early."
-                slot_times = {"Morning": "6:00 AM – 1:00 PM", "Afternoon": "2:00 PM – 7:00 PM", "Evening": "7:00 PM – 12:00 AM", "Midnight": "12:00 AM – 6:00 AM"}
-                slot_time = slot_times.get(slot_name, "")
-                success_msg = f"\n\n **Appointment Confirmed!**\nDoctor: **{doc_name}**\nPatient: **{result['patient']}**\nDate: **{result['date']}**\nSlot: **{slot_name}** ({slot_time})\nExact Time: **{result['time']}**\nToken: **{result['token']}**\nRemaining slots in {slot_name}: **{remaining}**\n\nPlease arrive 10 minutes early."
-                reply_text = re.sub(r'<BOOK>.*?</BOOK>', success_msg, reply_text)
+            status = result["status"]
+
+            if status == "success":
+                replacement = _confirmation_message(result, in_telugu)
+            elif status == "full":
+                replacement = _slot_full_message(result, in_telugu)
             else:
-                error_msg = f"\n\n **Slot Full:** I apologize, but the **{slot}** slot on that date is fully booked for this doctor. Could you please select a different slot?\n\n{result.get('availability', '')}"
-                reply_text = re.sub(r'<BOOK>.*?</BOOK>', error_msg, reply_text)
+                # invalid_doctor / invalid_slot / invalid_date -- the model wrote a
+                # tag we can't trust. Log it, and don't book anything.
+                print(f"\n=== REJECTED BOOKING TAG ({status}) ===")
+                print(f"    doctor={doc_name!r} slot={slot!r} date={date_str!r} patient={patient_name!r}")
+                print("=======================================\n")
+                replacement = _booking_failed_message(in_telugu)
+
+            reply_text = _ANY_BOOK_TAG.sub(replacement, reply_text)
 
         return ChatResponse(reply=reply_text)
-        
+
     except Exception as e:
         print("\n===  BACKEND ERROR  ===")
         traceback.print_exc()

@@ -18,6 +18,9 @@ class HistoryItem(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: List[HistoryItem] = []
+    # Language Whisper detected on the user's latest voice message ("en"/"te").
+    # None for typed messages, or when detection was inconclusive.
+    language: Optional[str] = None
 
 class ChatResponse(BaseModel):
     reply: str

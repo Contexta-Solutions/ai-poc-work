@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
+from typing import Optional
 import io
 
 from schemas import NoteRequest, PDFRequest
@@ -15,19 +16,27 @@ async def health_check():
     return {"status": "ok"}
 
 @router.post("/api/transcribe")
-async def transcribe(file: UploadFile = File(...)):
-    """Receives audio from the browser and returns transcribed text via Groq Whisper."""
+async def transcribe(file: UploadFile = File(...), language: Optional[str] = Form(None)):
+    """
+    Receives audio from the browser and returns transcribed text via Groq Whisper.
+
+    `language` ("en"/"te") forces a language; omit it to let Whisper auto-detect.
+    The detected language is returned so the caller can keep replying in kind --
+    it is None when Whisper heard something this app doesn't support.
+    """
     try:
         audio_bytes = await file.read()
         if len(audio_bytes) < 100:
             raise HTTPException(status_code=400, detail="Audio file too short or empty.")
-        
-        text = await transcribe_audio(audio_bytes, filename=file.filename or "audio.webm")
-        
+
+        text, detected_language = await transcribe_audio(
+            audio_bytes, filename=file.filename or "audio.webm", language=language
+        )
+
         if not text.strip():
             raise HTTPException(status_code=400, detail="No speech detected in the audio.")
-        
-        return {"text": text}
+
+        return {"text": text, "language": detected_language}
     except RuntimeError as re:
         raise HTTPException(status_code=503, detail=str(re))
     except HTTPException:

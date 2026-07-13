@@ -5,8 +5,74 @@ from doctors_data import DOCTORS
 
 MAX_PER_SLOT = 5  # each doctor can see at most 5 patients per slot
 
+# Canonical slot definitions. Single source of truth -- chat_service.py puts
+# these in the prompt and chat_routes.py puts them in the confirmation message,
+# so the patient can never be quoted two different time ranges for one slot.
+SLOTS = ["Morning", "Afternoon", "Evening"]
+SLOT_TIMES = {
+    "Morning": "9:00 AM – 12:00 PM",
+    "Afternoon": "1:00 PM – 4:00 PM",
+    "Evening": "6:00 PM – 9:00 PM",
+}
 SLOT_CODE = {"Morning": "1", "Afternoon": "2", "Evening": "3"}
 SLOT_START_HOURS = {"Morning": 9, "Afternoon": 13, "Evening": 18}
+
+# The assistant replies in Telugu when the patient speaks Telugu, so the model
+# can emit a Telugu (or romanized Telugu) slot name in the <BOOK> tag. Map those
+# back onto the canonical English name. Anything unrecognised is REJECTED rather
+# than silently defaulting -- an unmapped slot used to get token code "0" and a
+# 9 AM start time, so an Evening booking was confirmed for 9 in the morning and
+# never counted against the Evening slot's capacity.
+SLOT_ALIASES = {
+    # English
+    "morning": "Morning",
+    "afternoon": "Afternoon",
+    "evening": "Evening",
+    # Telugu script
+    "ఉదయం": "Morning",
+    "పొద్దున": "Morning",
+    "మధ్యాహ్నం": "Afternoon",
+    "మధ్యాహ్నము": "Afternoon",
+    "సాయంత్రం": "Evening",
+    "సాయంకాలం": "Evening",
+    # Romanized Telugu ("Tenglish")
+    "udayam": "Morning",
+    "poddun": "Morning",
+    "poddunna": "Morning",
+    "madhyahnam": "Afternoon",
+    "madhyanam": "Afternoon",
+    "sayantram": "Evening",
+    "sayankalam": "Evening",
+}
+
+_DOCTORS_BY_NAME = {doc["name"].strip().lower(): doc["name"] for doc in DOCTORS}
+
+
+def normalize_slot(raw: str) -> str | None:
+    """Canonical slot name, or None if it isn't a real bookable slot."""
+    if not raw:
+        return None
+    return SLOT_ALIASES.get(raw.strip().lower())
+
+
+def normalize_doctor(raw: str) -> str | None:
+    """Canonical doctor name as spelled in DOCTORS, or None if no such doctor."""
+    if not raw:
+        return None
+    key = raw.strip().lower()
+    if key in _DOCTORS_BY_NAME:
+        return _DOCTORS_BY_NAME[key]
+
+    # Tolerate a missing or differently-punctuated "Dr." prefix.
+    def _bare(name: str) -> str:
+        return name.replace("dr.", "").replace("dr ", "").strip()
+
+    bare_key = _bare(key)
+    for name_lower, name in _DOCTORS_BY_NAME.items():
+        if _bare(name_lower) == bare_key:
+            return name
+    return None
+
 
 def get_all_doctors() -> str:
     doc_strings = [f"{doc['name']} ({doc['specialty']} — {doc['sub_specialty']}) | Status: {doc['status']} | Schedule: {doc['schedule']}" for doc in DOCTORS]
@@ -16,65 +82,72 @@ def get_all_doctors() -> str:
 def get_slot_availability(doctor_name: str, date_str: str) -> str:
     """Return a human-readable string showing remaining slots for each session."""
     lines = []
-    for slot_name in ["Morning", "Afternoon", "Evening"]:
+    for slot_name in SLOTS:
         booked = appointments_store.count_booked(doctor_name, date_str, slot_name)
         remaining = max(0, MAX_PER_SLOT - booked)
         status = f"{remaining} slots available" if remaining > 0 else "FULL"
-        lines.append(f"  {slot_name} (9–12 PM / 1–4 PM / 6–9 PM): {status}".replace(
-            "9–12 PM / 1–4 PM / 6–9 PM",
-            {"Morning": "9:00 AM – 12:00 PM", "Afternoon": "1:00 PM – 4:00 PM", "Evening": "6:00 PM – 9:00 PM"}[slot_name]
-        ))
+        lines.append(f"  {slot_name} ({SLOT_TIMES[slot_name]}): {status}")
     return "\n".join(lines)
 
 
 def book_appointment(doctor_name: str, slot_str: str, date_str: str, patient_name: str) -> dict:
+    """
+    Book a slot. Every input is validated against the canonical data -- an
+    unrecognised doctor, slot or date is reported back as an error instead of
+    being silently coerced, so a mis-worded <BOOK> tag can never write a
+    corrupt appointment.
+    """
+    doctor = normalize_doctor(doctor_name)
+    if not doctor:
+        return {"status": "invalid_doctor", "requested": doctor_name}
+
+    slot_key = normalize_slot(slot_str)
+    if not slot_key:
+        return {"status": "invalid_slot", "requested": slot_str, "valid_slots": SLOTS}
+
     try:
-        date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-        day_num = date_obj.strftime("%d")
+        date_obj = datetime.strptime((date_str or "").strip(), "%Y-%m-%d")
     except ValueError:
-        day_num = datetime.now().strftime("%d")
-        date_str = datetime.now().strftime("%Y-%m-%d")
-    
-    slot_key = slot_str.strip().capitalize()
+        return {"status": "invalid_date", "requested": date_str}
 
-    count = appointments_store.count_booked(doctor_name, date_str, slot_key)
+    date_str = date_obj.strftime("%Y-%m-%d")
+    day_num = date_obj.strftime("%d")
 
+    count = appointments_store.count_booked(doctor, date_str, slot_key)
     if count >= MAX_PER_SLOT:
-        remaining_info = get_slot_availability(doctor_name, date_str)
-        return {"status": "full", "message": "This slot is fully booked.", "availability": remaining_info}
-        
+        return {
+            "status": "full",
+            "slot": slot_key,
+            "message": "This slot is fully booked.",
+            "availability": get_slot_availability(doctor, date_str),
+        }
+
     queue_num = count + 1
-    
+
     # Token format: DD + slot_code + queue (e.g., 15102 = day 15, Morning(1), patient 02)
-    code = SLOT_CODE.get(slot_key, "0")
-    token = f"{day_num}{code}{queue_num:02d}"
-    
-    start_hour = SLOT_START_HOURS.get(slot_key, 9)
-    
+    token = f"{day_num}{SLOT_CODE[slot_key]}{queue_num:02d}"
+
     total_mins = (queue_num - 1) * 20
-    add_hours = total_mins // 60
+    app_hour = SLOT_START_HOURS[slot_key] + total_mins // 60
     add_mins = total_mins % 60
-    
-    app_hour = start_hour + add_hours
+
     period = "AM" if app_hour < 12 else "PM"
     display_hour = app_hour if app_hour <= 12 else app_hour - 12
     if display_hour == 0:
         display_hour = 12
-    
-    exact_time = f"{display_hour:02d}:{add_mins:02d} {period}"
-    
-    # Remaining slots after this booking
-    remaining = MAX_PER_SLOT - queue_num
-    
-    appointments_store.add_appointment(doctor_name, patient_name, date_str, slot_key, queue_num, token)
 
+    exact_time = f"{display_hour:02d}:{add_mins:02d} {period}"
+
+    appointments_store.add_appointment(doctor, patient_name, date_str, slot_key, queue_num, token)
 
     return {
-        "status": "success", 
-        "token": token, 
-        "time": exact_time, 
-        "date": date_str, 
+        "status": "success",
+        "token": token,
+        "time": exact_time,
+        "date": date_str,
         "patient": patient_name,
+        "doctor": doctor,
         "slot": slot_key,
-        "remaining": remaining
+        "slot_time": SLOT_TIMES[slot_key],
+        "remaining": MAX_PER_SLOT - queue_num,
     }
