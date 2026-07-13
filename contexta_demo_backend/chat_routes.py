@@ -24,17 +24,18 @@ def _get_doctor_names():
 
 
 def _confirmation_message(result: dict, in_telugu: bool) -> str:
-    slot = result["slot"]
     if in_telugu:
+        # Everything in Telugu script except the things the system reads back:
+        # doctor name, date, clock time, token number.
         return (
-            f"\n\n **అపాయింట్‌మెంట్ కన్ఫర్మ్ అయ్యింది!**"
-            f"\nDoctor: **{result['doctor']}**"
+            f"\n\n **అపాయింట్‌మెంట్ ఖరారు అయ్యింది!**"
+            f"\nడాక్టర్: **{result['doctor']}**"
             f"\nపేషెంట్: **{result['patient']}**"
             f"\nతేదీ: **{result['date']}**"
-            f"\nస్లాట్: **{slot}** ({result['slot_time']})"
+            f"\nసమయ విభాగం: **{result['slot_telugu']}** ({result['slot_time']})"
             f"\nసమయం: **{result['time']}**"
-            f"\nటోకెన్: **{result['token']}**"
-            f"\n{slot} లో మిగిలిన స్లాట్‌లు: **{result['remaining']}**"
+            f"\nటోకెన్ నంబర్: **{result['token']}**"
+            f"\n{result['slot_telugu']} లో మిగిలిన స్థానాలు: **{result['remaining']}**"
             f"\n\nదయచేసి 10 నిమిషాలు ముందుగా రండి."
         )
     return (
@@ -42,24 +43,41 @@ def _confirmation_message(result: dict, in_telugu: bool) -> str:
         f"\nDoctor: **{result['doctor']}**"
         f"\nPatient: **{result['patient']}**"
         f"\nDate: **{result['date']}**"
-        f"\nSlot: **{slot}** ({result['slot_time']})"
+        f"\nSlot: **{result['slot']}** ({result['slot_time']})"
         f"\nExact Time: **{result['time']}**"
         f"\nToken: **{result['token']}**"
-        f"\nRemaining slots in {slot}: **{result['remaining']}**"
+        f"\nRemaining slots in {result['slot']}: **{result['remaining']}**"
         f"\n\nPlease arrive 10 minutes early."
     )
 
 
+def _already_booked_message(result: dict, in_telugu: bool) -> str:
+    """The assistant fired its booking tag again for an appointment the patient
+    already holds. Nothing was written -- show them the token they already have
+    instead of a second confirmation with a new number."""
+    if in_telugu:
+        return (
+            f"\n\n మీ అపాయింట్‌మెంట్ ఇప్పటికే బుక్ అయ్యింది — "
+            f"టోకెన్ నంబర్: **{result['token']}** "
+            f"(డాక్టర్: **{result['doctor']}**, తేదీ: **{result['date']}**, "
+            f"**{result['slot_telugu']}**, సమయం: **{result['time']}**)."
+        )
+    return (
+        f"\n\n You're already booked — Token: **{result['token']}** "
+        f"(Doctor: **{result['doctor']}**, Date: **{result['date']}**, "
+        f"**{result['slot']}**, Time: **{result['time']}**)."
+    )
+
+
 def _slot_full_message(result: dict, in_telugu: bool) -> str:
-    slot = result.get("slot", "")
     availability = result.get("availability", "")
     if in_telugu:
         return (
-            f"\n\n **స్లాట్ నిండిపోయింది:** క్షమించండి, ఆ తేదీన **{slot}** స్లాట్ పూర్తిగా బుక్ అయ్యింది. "
-            f"దయచేసి వేరే స్లాట్ ఎంచుకోండి.\n\n{availability}"
+            f"\n\n **స్థానాలు నిండిపోయాయి:** క్షమించండి, ఆ తేదీన **{result.get('slot_telugu', '')}** "
+            f"సమయ విభాగం పూర్తిగా బుక్ అయ్యింది. దయచేసి వేరే సమయం ఎంచుకోండి.\n\n{availability}"
         )
     return (
-        f"\n\n **Slot Full:** I apologize, but the **{slot}** slot on that date is fully booked "
+        f"\n\n **Slot Full:** I apologize, but the **{result.get('slot', '')}** slot on that date is fully booked "
         f"for this doctor. Could you please select a different slot?\n\n{availability}"
     )
 
@@ -115,6 +133,9 @@ async def chat_endpoint(request: ChatRequest):
 
             if status == "success":
                 replacement = _confirmation_message(result, in_telugu)
+            elif status == "already_booked":
+                # Idempotent: nothing was written, the original token stands.
+                replacement = _already_booked_message(result, in_telugu)
             elif status == "full":
                 replacement = _slot_full_message(result, in_telugu)
             else:

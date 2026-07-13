@@ -17,6 +17,14 @@ SLOT_TIMES = {
 SLOT_CODE = {"Morning": "1", "Afternoon": "2", "Evening": "3"}
 SLOT_START_HOURS = {"Morning": 9, "Afternoon": 13, "Evening": 18}
 
+# Telugu names for the slots. The <BOOK> tag and the store always use the English
+# name; this is only for what the patient reads.
+SLOT_TELUGU = {
+    "Morning": "ఉదయం",
+    "Afternoon": "మధ్యాహ్నం",
+    "Evening": "సాయంత్రం",
+}
+
 # The assistant replies in Telugu when the patient speaks Telugu, so the model
 # can emit a Telugu (or romanized Telugu) slot name in the <BOOK> tag. Map those
 # back onto the canonical English name. Anything unrecognised is REJECTED rather
@@ -90,12 +98,49 @@ def get_slot_availability(doctor_name: str, date_str: str) -> str:
     return "\n".join(lines)
 
 
+def _exact_time(slot_key: str, queue_num: int) -> str:
+    """Each patient in a slot gets a 20-minute window from the slot's start."""
+    total_mins = (queue_num - 1) * 20
+    app_hour = SLOT_START_HOURS[slot_key] + total_mins // 60
+    add_mins = total_mins % 60
+
+    period = "AM" if app_hour < 12 else "PM"
+    display_hour = app_hour if app_hour <= 12 else app_hour - 12
+    if display_hour == 0:
+        display_hour = 12
+
+    return f"{display_hour:02d}:{add_mins:02d} {period}"
+
+
+def _appointment_result(status: str, doctor: str, patient_name: str, date_str: str,
+                        slot_key: str, queue_num: int, token: str) -> dict:
+    return {
+        "status": status,
+        "token": token,
+        "time": _exact_time(slot_key, queue_num),
+        "date": date_str,
+        "patient": patient_name,
+        "doctor": doctor,
+        "slot": slot_key,
+        "slot_telugu": SLOT_TELUGU[slot_key],
+        "slot_time": SLOT_TIMES[slot_key],
+        "remaining": max(0, MAX_PER_SLOT - appointments_store.count_booked(doctor, date_str, slot_key)),
+    }
+
+
 def book_appointment(doctor_name: str, slot_str: str, date_str: str, patient_name: str) -> dict:
     """
     Book a slot. Every input is validated against the canonical data -- an
     unrecognised doctor, slot or date is reported back as an error instead of
     being silently coerced, so a mis-worded <BOOK> tag can never write a
     corrupt appointment.
+
+    Booking is IDEMPOTENT. The assistant is not reliable about emitting its
+    booking tag exactly once -- a harmless follow-up like "ok" or "thanks" can
+    make it fire the tag again -- and that used to create a second appointment
+    with a brand new token for a slot the patient already held. Re-booking the
+    same doctor + patient + date + slot now returns the appointment that already
+    exists, with its original token, and writes nothing.
     """
     doctor = normalize_doctor(doctor_name)
     if not doctor:
@@ -113,11 +158,19 @@ def book_appointment(doctor_name: str, slot_str: str, date_str: str, patient_nam
     date_str = date_obj.strftime("%Y-%m-%d")
     day_num = date_obj.strftime("%d")
 
+    existing = appointments_store.find_appointment(doctor, patient_name, date_str, slot_key)
+    if existing:
+        return _appointment_result(
+            "already_booked", doctor, patient_name, date_str, slot_key,
+            existing["queue_num"], existing["token"],
+        )
+
     count = appointments_store.count_booked(doctor, date_str, slot_key)
     if count >= MAX_PER_SLOT:
         return {
             "status": "full",
             "slot": slot_key,
+            "slot_telugu": SLOT_TELUGU[slot_key],
             "message": "This slot is fully booked.",
             "availability": get_slot_availability(doctor, date_str),
         }
@@ -127,27 +180,8 @@ def book_appointment(doctor_name: str, slot_str: str, date_str: str, patient_nam
     # Token format: DD + slot_code + queue (e.g., 15102 = day 15, Morning(1), patient 02)
     token = f"{day_num}{SLOT_CODE[slot_key]}{queue_num:02d}"
 
-    total_mins = (queue_num - 1) * 20
-    app_hour = SLOT_START_HOURS[slot_key] + total_mins // 60
-    add_mins = total_mins % 60
-
-    period = "AM" if app_hour < 12 else "PM"
-    display_hour = app_hour if app_hour <= 12 else app_hour - 12
-    if display_hour == 0:
-        display_hour = 12
-
-    exact_time = f"{display_hour:02d}:{add_mins:02d} {period}"
-
     appointments_store.add_appointment(doctor, patient_name, date_str, slot_key, queue_num, token)
 
-    return {
-        "status": "success",
-        "token": token,
-        "time": exact_time,
-        "date": date_str,
-        "patient": patient_name,
-        "doctor": doctor,
-        "slot": slot_key,
-        "slot_time": SLOT_TIMES[slot_key],
-        "remaining": MAX_PER_SLOT - queue_num,
-    }
+    return _appointment_result(
+        "success", doctor, patient_name, date_str, slot_key, queue_num, token
+    )
