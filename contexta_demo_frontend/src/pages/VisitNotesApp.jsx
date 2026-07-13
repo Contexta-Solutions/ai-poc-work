@@ -2,20 +2,40 @@ import React, { useState, useRef } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+// Section order mirrors ortho templates_6699.md exactly:
+//   Chief Complaint -> Diagnosis (ICD-10) -> History & Complaints ->
+//   Examination & Findings -> Impression/Diagnosis -> Management Plan ->
+//   Prescriptions -> Lab Orders -> Imaging Orders -> Follow-up Plan
+// `complaints` / `advice` / `plan` only exist for the older non-ortho templates
+// (Diabetes / Asthma / Pediatrics); they render empty for ortho and are hidden.
 const systemAttributeHeaders = {
-  diagnosis: 'Diagnosis',
+  chief_complaint: 'Chief Complaint',
+  diagnosis: 'Diagnosis (ICD-10)',
+  history_complaints: 'History & Complaints',
+  examination_findings: 'Examination & Findings',
+  impression: 'Impression / Diagnosis',
+  management_plan: 'Management Plan',
   complaints: 'Complaints',
   advice: 'Advice',
   prescription: 'Prescription (Rx)',
+  lab_orders: 'Lab Orders',
+  imaging_orders: 'Imaging Orders',
   plan: 'Plan',
   follow_up_plan: 'Follow-up Plan'
 };
 
 const sectionThemes = {
   diagnosis: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', highlight: 'border-l-teal-500', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+  chief_complaint: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', highlight: 'border-l-rose-500', icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+  history_complaints: { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200', highlight: 'border-l-pink-500', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+  examination_findings: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', highlight: 'border-l-purple-500', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+  impression: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', highlight: 'border-l-indigo-500', icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+  management_plan: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', highlight: 'border-l-amber-500', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
   complaints: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', highlight: 'border-l-rose-500', icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
   advice: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', highlight: 'border-l-amber-500', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
   prescription: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', highlight: 'border-l-emerald-500', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
+  lab_orders: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200', highlight: 'border-l-cyan-500', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+  imaging_orders: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', highlight: 'border-l-orange-500', icon: 'M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9zM15 13a3 3 0 11-6 0 3 3 0 016 0z' },
   plan: { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200', highlight: 'border-l-sky-500', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
   follow_up_plan: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-200', highlight: 'border-l-violet-500', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' }
 };
@@ -126,6 +146,35 @@ const TemplateLibrary = ({ onBack }) => {
           </div>
         ))}
       </div>
+    </div>
+  );
+};
+
+// Renders a template line whose "___" blank(s) become inline fields. The line
+// always shows, whether or not the dictation supplied the value.
+const SlotLine = ({ item, onChange }) => {
+  const parts = (item.line || '').split('___');
+  return (
+    <div className="text-[14px] text-slate-700 leading-relaxed font-medium flex flex-wrap items-center">
+      {parts.map((part, i) => (
+        <React.Fragment key={i}>
+          <span className="whitespace-pre-wrap">{part}</span>
+          {i < parts.length - 1 && (
+            <input
+              type="text"
+              value={item.value || ''}
+              onChange={e => onChange(e.target.value)}
+              placeholder="___"
+              title={item.value ? 'Dictated value — click to edit' : 'Not dictated — click to fill in'}
+              className={`mx-1 px-2 py-0.5 w-24 text-[13px] text-center rounded-md border outline-none transition-all focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 ${
+                item.value
+                  ? 'bg-teal-50 border-teal-200 text-teal-800 font-semibold'
+                  : 'bg-amber-50/70 border-amber-200 border-dashed text-slate-600 placeholder:text-amber-400'
+              }`}
+            />
+          )}
+        </React.Fragment>
+      ))}
     </div>
   );
 };
@@ -339,14 +388,32 @@ export default function VisitNotesApp() {
     setEditingItem(null);
   };
 
+  // A slot line always renders; its "___" blank is an inline field the doctor
+  // fills by hand when the dictation didn't supply the value.
+  const handleSlotChange = (sectionKey, itemIndex, newValue) => {
+    setDocumentData(prev => {
+      const doc = { ...prev.document };
+      doc[sectionKey] = doc[sectionKey].map((item, i) => {
+        if (i !== itemIndex) return item;
+        const blank = newValue || '___';
+        if (item.type === 'rx_slot') {
+          const filledDose = (item.dose || '').split('___').join(blank);
+          return { ...item, value: newValue, dosage: filledDose, rendered_line: `${item.drug} | ${filledDose} | ${item.instructions || ''}` };
+        }
+        return { ...item, value: newValue, rendered_line: (item.line || '').split('___').join(blank) };
+      });
+      return { ...prev, document: doc };
+    });
+  };
+
   const handleAddItem = (sectionKey) => {
     if (!addItemText.trim()) return;
     setDocumentData(prev => {
       const doc = { ...prev.document };
-      doc[sectionKey] = [
-        ...(doc[sectionKey] || []),
-        { rendered_line: addItemText.trim(), type: 'manual' }
-      ];
+      const newItem = sectionKey === 'prescription'
+        ? { drug: addItemText.trim(), composition: '', dosage: '', frequency: '', duration: '', instructions: '', type: 'manual', rendered_line: addItemText.trim() }
+        : { rendered_line: addItemText.trim(), type: 'manual' };
+      doc[sectionKey] = [...(doc[sectionKey] || []), newItem];
       return { ...prev, document: doc };
     });
     setAddItemText('');
@@ -505,7 +572,12 @@ export default function VisitNotesApp() {
               {Object.keys(systemAttributeHeaders).map(sectionKey => {
                 const items = documentData.document[sectionKey];
                 const hasItems = items && items.length > 0;
-                
+
+                // A section the active template doesn't define comes back empty
+                // (e.g. `plan` for the ortho templates, `chief_complaint` for
+                // the older ones). Don't render an empty shell for it.
+                if (!hasItems) return null;
+
                 const theme = sectionThemes[sectionKey] || sectionThemes.plan;
                 const isEditable = sectionKey !== 'diagnosis';
 
@@ -516,9 +588,86 @@ export default function VisitNotesApp() {
                       {systemAttributeHeaders[sectionKey]}
                       {hasItems && <span className="ml-auto text-[10px] font-medium opacity-50">{items.length} {items.length === 1 ? 'item' : 'items'}</span>}
                     </div>
+                    {sectionKey === 'prescription' ? (
+                      /* ── PRESCRIPTION TABLE (matches the source doc's own columns) ── */
+                      <div className="p-2.5">
+                        {hasItems && (
+                          <div className="overflow-x-auto rounded-lg border border-slate-100 mb-2">
+                            <table className="w-full text-[13px] text-left border-collapse">
+                              <thead>
+                                <tr className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider">
+                                  <th className="px-3 py-2 font-semibold">Drug</th>
+                                  <th className="px-3 py-2 font-semibold">Composition</th>
+                                  <th className="px-3 py-2 font-semibold">Dosage</th>
+                                  <th className="px-3 py-2 font-semibold">Frequency</th>
+                                  <th className="px-3 py-2 font-semibold">Duration</th>
+                                  <th className="px-3 py-2 font-semibold">Instructions</th>
+                                  <th className="px-3 py-2 font-semibold w-8"></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {items.map((item, idx) => (
+                                  <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/60 transition-colors">
+                                    <td className="px-3 py-2 font-medium text-slate-700">{item.drug}</td>
+                                    <td className="px-3 py-2 text-slate-600">{item.composition || '—'}</td>
+                                    <td className="px-3 py-2 text-slate-600">
+                                      {item.type === 'rx_slot' ? (
+                                        <SlotLine
+                                          item={{ line: item.dose, value: item.value }}
+                                          onChange={val => handleSlotChange(sectionKey, idx, val)}
+                                        />
+                                      ) : (item.dosage || '—')}
+                                    </td>
+                                    <td className="px-3 py-2 text-slate-600">{item.frequency || '—'}</td>
+                                    <td className="px-3 py-2 text-slate-600">{item.duration || '—'}</td>
+                                    <td className="px-3 py-2 text-slate-600">{item.instructions || '—'}</td>
+                                    <td className="px-3 py-2">
+                                      <button onClick={() => handleRemoveItem(sectionKey, idx)} className="text-slate-300 hover:text-rose-500 hover:bg-rose-50 p-1 rounded-lg transition-all" title="Remove item">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+
+                        {addingToSection === sectionKey ? (
+                          <div className="flex items-center gap-2 p-2">
+                            <input
+                              autoFocus
+                              className="flex-1 text-[13px] text-slate-700 bg-white border border-teal-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 transition-all placeholder:text-slate-300"
+                              placeholder="Drug name..."
+                              value={addItemText}
+                              onChange={e => setAddItemText(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleAddItem(sectionKey);
+                                if (e.key === 'Escape') { setAddingToSection(null); setAddItemText(''); }
+                              }}
+                            />
+                            <button onClick={() => handleAddItem(sectionKey)} className="text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 p-1.5 rounded-lg transition-all" title="Add">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>
+                            </button>
+                            <button onClick={() => { setAddingToSection(null); setAddItemText(''); }} className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg transition-all" title="Cancel">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setAddingToSection(sectionKey); setAddItemText(''); }}
+                            className="w-full flex items-center justify-center gap-1.5 p-2 text-xs font-semibold text-slate-400 hover:text-teal-600 hover:bg-teal-50/50 rounded-lg border border-dashed border-slate-200 hover:border-teal-300 transition-all"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                            Add Prescription
+                          </button>
+                        )}
+                      </div>
+                    ) : (
                     <div className="p-2.5 space-y-1.5">
                       {hasItems && items.map((item, idx) => {
-                        const isEditing = editingItem && editingItem.sectionKey === sectionKey && editingItem.itemIndex === idx;
+                        const isSlot = item.type === 'slot';
+                        const isEditing = !isSlot && editingItem && editingItem.sectionKey === sectionKey && editingItem.itemIndex === idx;
 
                         return (
                           <div key={idx} className={`flex items-center justify-between p-3 rounded-lg border-l-[3px] ${theme.highlight} ${item.type === 'extended' ? 'bg-fuchsia-50/40 border border-fuchsia-100' : item.type === 'manual' ? 'bg-indigo-50/40 border border-indigo-100' : 'bg-slate-50/40 border border-slate-100/60 hover:bg-slate-50'} transition-all`}>
@@ -547,15 +696,19 @@ export default function VisitNotesApp() {
                             ) : (
                               /* ── VIEW MODE ── */
                               <>
-                                <div className="text-[14px] text-slate-700 leading-relaxed font-medium">
-                                  {item.rendered_line}
-                                </div>
+                                {isSlot ? (
+                                  <SlotLine item={item} onChange={val => handleSlotChange(sectionKey, idx, val)} />
+                                ) : (
+                                  <div className="text-[14px] text-slate-700 leading-relaxed font-medium">
+                                    {item.rendered_line}
+                                  </div>
+                                )}
                                 <div className="flex items-center gap-2 ml-4 shrink-0">
                                   <span className={`text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-md ${getTypeStyle(item.type)}`}>
                                     {item.type === 'rx_fixed' ? 'template' : item.type === 'rx_slot' ? 'template' : item.type.replace('_', ' ')}
                                   </span>
-                                  {/* Edit button (pen icon) */}
-                                  {isEditable && (
+                                  {/* Edit button (pen icon) — slot lines are edited via their inline blank */}
+                                  {isEditable && !isSlot && (
                                     <button
                                       onClick={() => setEditingItem({ sectionKey, itemIndex: idx, text: item.rendered_line })}
                                       className="text-slate-300 hover:text-teal-500 hover:bg-teal-50 p-1 rounded-lg transition-all"
@@ -610,6 +763,7 @@ export default function VisitNotesApp() {
                         )
                       )}
                     </div>
+                    )}
                   </div>
                 );
               })}

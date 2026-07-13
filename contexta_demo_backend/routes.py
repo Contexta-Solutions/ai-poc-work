@@ -45,10 +45,7 @@ async def parse_note(req: NoteRequest):
     try:
         extracted_data = extract_clinical_data(req.voice_note)
         template = ClinicalTemplate(extracted_data.get("base_template"))
-        
-        # Set complaints from dictation extraction
-        template.set_complaints(extracted_data.get("complaints", []))
-        
+
         # Set prescriptions from dictation extraction/ If not mentioned use standard template one
         template.set_prescriptions(extracted_data.get("prescriptions", []))
         

@@ -7,10 +7,17 @@ class ClinicalTemplate:
     def __init__(self, template_id: str):
         self.template_id = template_id if template_id else "Generic Consultation"
         self.sections: Dict[str, List[Dict[str, Any]]] = {
+            "chief_complaint": [],
             "diagnosis": [{"line": self.template_id, "type": "fixed"}],
+            "history_complaints": [],
+            "examination_findings": [],
+            "impression": [],
+            "management_plan": [],
             "complaints": [],
             "advice": [],
             "prescription": [],
+            "lab_orders": [],
+            "imaging_orders": [],
             "plan": [],
             "follow_up_plan": []
         }
@@ -20,17 +27,8 @@ class ClinicalTemplate:
 
     def _load_base_template(self):
         for sec_name, items in TEMPLATE_SECTIONS.get(self.template_id, {}).items():
-            if sec_name in ("complaints",):
-                continue
             if sec_name in self.sections:
                 self.sections[sec_name] = copy.deepcopy(items)
-
-    def set_complaints(self, complaints: List[str]):
-        """Populate complaints section entirely from LLM-extracted dictation data."""
-        self.sections["complaints"] = [
-            {"line": c, "type": "extracted", "rendered_line": c}
-            for c in complaints if c.strip()
-        ]
 
     def set_prescriptions(self, prescriptions: List[Dict[str, str]]):
         """Append LLM-extracted prescriptions to existing template defaults."""
@@ -84,35 +82,61 @@ class ClinicalTemplate:
             valid_items = []
             for item in items:
                 if item.get("type") == "extracted":
-                    pass 
-                
-                # 1. Standard Template Sentences with Blanks
+                    # Doctor-dictated medicine, appended via set_prescriptions() --
+                    # only has drug/dose/notes. Backfill the 6-column Rx schema so
+                    # the frontend table can render it alongside rx_fixed rows.
+                    item.setdefault("composition", "")
+                    item["dosage"] = item.get("dosage") or item.get("dose", "")
+                    item.setdefault("frequency", "")
+                    item.setdefault("duration", "")
+                    item["instructions"] = item.get("instructions") or item.get("notes", "")
+
+                # 1. Standard Template Sentences with Blanks. The line ALWAYS
+                # renders -- the template loads whole. If the dictation supplied
+                # the value it's filled in; otherwise the "___" blank stays put
+                # for the doctor to fill in by hand in the UI.
                 elif item.get("type") == "slot":
                     val = item.get("value")
-                    if not val:
-                        continue 
-                    item["rendered_line"] = item["line"].replace("___", str(val))
-                
+                    item["rendered_line"] = item["line"].replace("___", str(val)) if val else item["line"]
+
                 # 2. Fixed Sentences
                 elif item.get("type") == "fixed":
                     item["rendered_line"] = item["line"]
-                
-                # 3. Rx Table: Fixed Drugs
+
+                # 3. Rx Table: Fixed Drugs -- 6-column schema (composition/dosage/
+                # frequency/duration/instructions) for the ortho templates, or the
+                # legacy 3-field schema (dose/notes) for DIA-T2DM/PUL-ASTHMA/PED-ARI.
                 elif item.get("type") == "rx_fixed":
-                    item["rendered_line"] = f"{item['drug']} | {item['dose']} | {item['notes']}"
-                
-                # 4. Rx Table: Slots for Doses
+                    composition = item.get("composition", "")
+                    dosage = item.get("dosage", item.get("dose", ""))
+                    frequency = item.get("frequency", "")
+                    duration = item.get("duration", "")
+                    instructions = item.get("instructions", item.get("notes", ""))
+                    item["composition"] = composition
+                    item["dosage"] = dosage
+                    item["frequency"] = frequency
+                    item["duration"] = duration
+                    item["instructions"] = instructions
+                    summary_bits = [b for b in [dosage, frequency, duration] if b]
+                    item["rendered_line"] = " | ".join([item["drug"]] + summary_bits + ([instructions] if instructions else []))
+
+                # 4. Rx Table: Slots for Doses (legacy schema only -- no ortho
+                # template has a variable-dose prescription). Same rule as slot:
+                # the row always renders, blank dose and all.
                 elif item.get("type") == "rx_slot":
                     val = item.get("value")
-                    if not val:
-                        continue
-                    filled_dose = item["dose"].replace("___", str(val))
-                    item["rendered_line"] = f"{item['drug']} | {filled_dose} | {item['notes']}"
-                
+                    filled_dose = item["dose"].replace("___", str(val)) if val else item["dose"]
+                    item["composition"] = item.get("composition", "")
+                    item["dosage"] = filled_dose
+                    item["frequency"] = item.get("frequency", "")
+                    item["duration"] = item.get("duration", "")
+                    item["instructions"] = item.get("instructions", item.get("notes", ""))
+                    item["rendered_line"] = f"{item['drug']} | {filled_dose} | {item['instructions']}"
+
                 # 5. Gap Detection (Extensions)
                 elif item.get("type") == "extended":
                     item["rendered_line"] = f"{item['name']}: {item['value']}"
-                    
+
                 valid_items.append(item)
             cleaned_sections[sec_name] = valid_items
 
