@@ -2,6 +2,7 @@ fastapi
 uvicorn
 pydantic
 fpdf2
+uharfbuzz
 anthropic
 python-dotenv
 httpx

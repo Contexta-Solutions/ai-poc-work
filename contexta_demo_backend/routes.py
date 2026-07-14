@@ -8,6 +8,8 @@ from llm_service import extract_clinical_data
 from speech_service import transcribe_audio
 from engine import ClinicalTemplate
 from pdf_service import create_emr_pdf
+from translate_service import translate_document
+from doctors_data import DOCTORS
 
 router = APIRouter()
 
@@ -75,13 +77,41 @@ async def parse_note(req: NoteRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/api/doctors")
+async def list_doctors():
+    """Doctor roster, so the Visit Notes doctor picker uses the same source of
+    truth as the ChatBot instead of hardcoding its own list."""
+    return {"doctors": DOCTORS}
+
+
 @router.post("/api/generate-pdf")
 async def generate_pdf(req: PDFRequest):
+    """
+    Render the note as a PDF in English, Telugu or Hindi.
+
+    The frontend posts the document as it currently stands on screen, so any
+    edits the doctor made are what gets printed. For a non-English language the
+    text is translated first (drug names and codes are left in Latin).
+    """
     try:
-        pdf_bytes = create_emr_pdf(req.model_dump())
+        payload = req.model_dump()
+
+        if payload.get("language") in ("te", "hi"):
+            payload["clinical_data"] = translate_document(
+                payload.get("clinical_data") or {}, payload["language"]
+            )
+
+        pdf_bytes = create_emr_pdf(payload)
+
+        lang = payload.get("language", "en")
+        filename = f"EMR_{payload.get('visit_date', '')}_{lang}.pdf".replace(" ", "_")
         return StreamingResponse(
-            io.BytesIO(pdf_bytes), media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="EMR.pdf"'}
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+    except RuntimeError as re:
+        raise HTTPException(status_code=503, detail=str(re))
     except Exception as e:
         import traceback
         traceback.print_exc()

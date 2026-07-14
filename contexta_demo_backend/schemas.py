@@ -7,6 +7,11 @@ class NoteRequest(BaseModel):
 class PDFRequest(BaseModel):
     visit_date: str
     doctor: str
+    patient: str = ""
+    template_id: str = ""
+    # "en" | "te" | "hi". Non-English notes are translated before rendering.
+    language: str = "en"
+    # The document exactly as it stands on screen, edits included.
     clinical_data: Dict[str, Any]
 
 # ─── ChatBot Schemas ───
