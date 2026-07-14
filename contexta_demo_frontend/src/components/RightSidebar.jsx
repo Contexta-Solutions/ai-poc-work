@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Clock, Calendar, AlertCircle, Heart, Wind, Stethoscope, Bone, Sparkles, Brain, Ear } from 'lucide-react';
 
-export default function RightSidebar({ onClose }) {
+export default function RightSidebar({ onClose, className = '' }) {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   useEffect(() => {
@@ -51,15 +51,17 @@ export default function RightSidebar({ onClose }) {
   };
 
   return (
-    <div className="w-[30%] min-w-[320px] max-w-[400px] border-l border-gray-200 dark:border-[#222e35] flex flex-col bg-[#f0f2f5] dark:bg-[#202c33] animate-fade-in transition-colors">
-      <div className="h-[60px] bg-[#f0f2f5] dark:bg-[#202c33] flex items-center px-6 border-b border-gray-200 dark:border-[#222e35] flex-shrink-0 transition-colors">
-        <X size={24} className="cursor-pointer text-[#54656f] dark:text-[#aebac1] hover:text-[#111b21] dark:hover:text-[#e9edef]" onClick={onClose} />
-        <span className="ml-6 text-[16px] text-[#111b21] dark:text-[#e9edef] font-medium">Contact info</span>
+    // Width/position come from `className`: a full-screen overlay on phone and
+    // tablet, a plain third column from lg up.
+    <div className={`${className} border-l border-gray-200 dark:border-[#222e35] flex flex-col bg-[#f0f2f5] dark:bg-[#202c33] animate-fade-in transition-colors`}>
+      <div className="h-[60px] bg-[#f0f2f5] dark:bg-[#202c33] flex items-center px-4 sm:px-6 border-b border-gray-200 dark:border-[#222e35] flex-shrink-0 transition-colors">
+        <X size={24} className="cursor-pointer text-[#54656f] dark:text-[#aebac1] hover:text-[#111b21] dark:hover:text-[#e9edef] flex-shrink-0" onClick={onClose} />
+        <span className="ml-4 sm:ml-6 text-[16px] text-[#111b21] dark:text-[#e9edef] font-medium">Contact info</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="bg-white dark:bg-[#111b21] py-8 flex flex-col items-center justify-center shadow-sm mb-2 transition-colors">
-          <div className="w-48 h-48 rounded-full overflow-hidden flex items-center justify-center bg-[#00a884] dark:bg-[#00a884] border border-gray-200 dark:border-[#111b21] shadow-sm mb-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="bg-white dark:bg-[#111b21] py-6 sm:py-8 flex flex-col items-center justify-center shadow-sm mb-2 transition-colors">
+          <div className="w-32 h-32 sm:w-48 sm:h-48 rounded-full overflow-hidden flex items-center justify-center bg-[#00a884] dark:bg-[#00a884] border border-gray-200 dark:border-[#111b21] shadow-sm mb-4">
             <img src="/favicon.svg" alt="Contexta Health" className="w-full h-full object-cover" />
           </div>
           <a href="https://contexta-demo.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[20px] text-[#111b21] dark:text-[#e9edef] font-normal hover:text-[#00878A] dark:hover:text-[#00a884] transition-colors no-underline">Contexta Health</a>
@@ -67,7 +69,7 @@ export default function RightSidebar({ onClose }) {
           <a href="https://contexta-demo.vercel.app" target="_blank" rel="noopener noreferrer" className="text-[12px] text-[#00878A] dark:text-[#00a884] hover:underline mt-1 block">Website</a>
         </div>
 
-        <div className="bg-white dark:bg-[#111b21] px-6 py-4 shadow-sm mb-2 transition-colors">
+        <div className="bg-white dark:bg-[#111b21] px-4 sm:px-6 py-4 shadow-sm mb-2 transition-colors">
           {/* General Physician */}
           <h3 className="text-[14px] text-[#54656f] dark:text-[#8696a0] mb-3 uppercase tracking-wide flex items-center gap-2">
             <Stethoscope size={14} className="text-teal-400" /> General Physician

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Send, Square, CheckCheck, Stethoscope, UserPlus } from 'lucide-react';
+import { Mic, Send, Square, CheckCheck, Stethoscope, UserPlus, ArrowLeft } from 'lucide-react';
 
 const formatMessage = (text) => {
   if (!text) return null;
@@ -20,7 +20,7 @@ const formatMessage = (text) => {
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || '';
 
-export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMode, onNewPatient }) {
+export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMode, onNewPatient, className = '', onBack }) {
   const [inputValue, setInputValue] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
@@ -203,30 +203,38 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#efeae2] dark:bg-[#0b141a] relative min-w-0 transition-colors">
-      <div 
+    <div className={`${className} flex-1 flex-col bg-[#efeae2] dark:bg-[#0b141a] relative min-w-0 transition-colors`}>
+      <div
         className={`absolute inset-0 z-0 pointer-events-none ${isDarkMode ? 'opacity-[0.04] invert' : 'opacity-[0.06]'}`}
         style={{ backgroundImage: 'url("https://static.whatsapp.net/rsrc.php/v3/yl/r/gi_DckOUM5a.png")' }}
       ></div>
 
-      <div className="h-[60px] bg-white dark:bg-[#111b21] flex items-center justify-between px-4 z-10 border-b border-gray-200 dark:border-[#202c33] transition-colors">
-        <div className="flex items-center cursor-pointer flex-1 group" onClick={onToggleInfo}>
-          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[#00a884] dark:bg-[#00a884] overflow-hidden">
+      <div className="h-[60px] flex-shrink-0 bg-white dark:bg-[#111b21] flex items-center justify-between px-2 sm:px-4 z-10 border-b border-gray-200 dark:border-[#202c33] transition-colors">
+        {/* Back to the chat list -- phone only; from md up the list is already on screen. */}
+        <button
+          onClick={onBack}
+          className="md:hidden p-1.5 rounded-md text-[#54656f] dark:text-[#aebac1] hover:bg-gray-100 dark:hover:bg-[#202c33] transition-colors flex-shrink-0"
+          title="Back to chats"
+        >
+          <ArrowLeft size={22} />
+        </button>
+        <div className="flex items-center cursor-pointer flex-1 min-w-0 group" onClick={onToggleInfo}>
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-[#00a884] dark:bg-[#00a884] overflow-hidden flex-shrink-0">
             <img src="/favicon.svg" alt="Contexta Health" className="w-full h-full object-cover" />
           </div>
-          <div className="ml-4">
-            <h2 className="text-[16px] text-[#111b21] dark:text-[#e9edef] font-medium group-hover:underline">Contexta Health</h2>
-            <p className="text-[13px] text-[#667781] dark:text-[#8696a0]">AI Clinical Assistant</p>
+          <div className="ml-2 sm:ml-4 min-w-0">
+            <h2 className="text-[15px] sm:text-[16px] text-[#111b21] dark:text-[#e9edef] font-medium group-hover:underline truncate">Contexta Health</h2>
+            <p className="text-[12px] sm:text-[13px] text-[#667781] dark:text-[#8696a0] truncate">AI Clinical Assistant</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-[#54656f] dark:text-[#aebac1]">
-          <button 
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-[#202c33] transition-colors border border-transparent hover:border-gray-200 dark:hover:border-[#2a3942]" 
-            onClick={onNewPatient} 
+        <div className="flex items-center gap-0.5 sm:gap-2 text-[#54656f] dark:text-[#aebac1] flex-shrink-0">
+          <button
+            className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-md text-sm font-medium hover:bg-gray-100 dark:hover:bg-[#202c33] transition-colors border border-transparent hover:border-gray-200 dark:hover:border-[#2a3942]"
+            onClick={onNewPatient}
             title="Start New Patient Session"
           >
             <UserPlus size={18} />
-            <span className="hidden sm:inline">New Patient</span>
+            <span className="hidden lg:inline">New Patient</span>
           </button>
           <button className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-[#202c33] transition-colors" onClick={onToggleInfo} title="View Doctor List">
             <Stethoscope size={22} />
@@ -234,17 +242,17 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-[5%] lg:px-[10%] py-4 z-10 flex flex-col gap-2">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-[5%] lg:px-[10%] py-4 z-10 flex flex-col gap-2">
         {messages.map((msg) => (
           <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div 
-              className={`px-3 py-2 max-w-[75%] shadow-sm relative text-[14.2px] rounded-lg ${
-                msg.sender === 'user' 
-                  ? 'bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] rounded-tr-none' 
+            <div
+              className={`px-3 py-2 max-w-[85%] sm:max-w-[75%] shadow-sm relative text-[14.2px] rounded-lg ${
+                msg.sender === 'user'
+                  ? 'bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] rounded-tr-none'
                   : 'bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] rounded-tl-none'
               }`}
             >
-              <span className="whitespace-pre-wrap leading-relaxed">{formatMessage(msg.text)}</span>
+              <span className="whitespace-pre-wrap break-words leading-relaxed">{formatMessage(msg.text)}</span>
               <div className="text-[11px] text-[#667781] dark:text-[#8696a0] text-right mt-1 ml-3 inline-flex items-center float-right gap-1">
                 {msg.time}
                 {msg.sender === 'user' && (
@@ -257,8 +265,8 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="bg-[#f0f2f5] dark:bg-[#202c33] flex items-end px-4 py-3 z-10 transition-colors">
-        <div className="flex-1 bg-white dark:bg-[#2a3942] rounded-lg flex items-center px-3 shadow-sm py-2 transition-colors border border-transparent focus-within:border-gray-300 dark:focus-within:border-gray-600">
+      <div className="bg-[#f0f2f5] dark:bg-[#202c33] flex-shrink-0 flex items-end px-2 sm:px-4 py-2 sm:py-3 z-10 transition-colors">
+        <div className="flex-1 min-w-0 bg-white dark:bg-[#2a3942] rounded-lg flex items-center px-3 shadow-sm py-2 transition-colors border border-transparent focus-within:border-gray-300 dark:focus-within:border-gray-600">
           <textarea 
             ref={textareaRef}
             rows={1}
@@ -267,11 +275,13 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
             onChange={handleInput}
             onKeyDown={handleKeyDown}
             disabled={isRecording || isProcessingAudio}
-            className="w-full bg-transparent border-none outline-none focus-visible:outline-none text-[15px] text-[#111b21] dark:text-[#e9edef] placeholder-[#667781] dark:placeholder-[#8696a0] resize-none overflow-y-auto min-h-[24px] max-h-[120px]"
+            /* 16px on phones: iOS Safari zooms the whole page in when you focus
+               an input with a smaller font size. */
+            className="w-full bg-transparent border-none outline-none focus-visible:outline-none text-[16px] sm:text-[15px] text-[#111b21] dark:text-[#e9edef] placeholder-[#667781] dark:placeholder-[#8696a0] resize-none overflow-y-auto min-h-[24px] max-h-[120px]"
           />
         </div>
 
-        <div className="flex items-center justify-center ml-4 pb-2 text-[#54656f] dark:text-[#aebac1]">
+        <div className="flex items-center justify-center ml-2 sm:ml-4 pb-2 flex-shrink-0 text-[#54656f] dark:text-[#aebac1]">
           {inputValue.trim() ? (
              <button onClick={handleSend} className="hover:text-[#00a884] transition">
                <Send size={24} />

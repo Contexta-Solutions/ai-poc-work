@@ -1,10 +1,12 @@
 import React from 'react';
 import { Search, MoreHorizontal, Edit, Moon, Sun, User } from 'lucide-react';
 
-export default function Sidebar({ lastMessage, isDarkMode, toggleTheme }) {
+export default function Sidebar({ lastMessage, isDarkMode, toggleTheme, className = '', onSelectChat }) {
   return (
-    <div className="w-[30%] min-w-[320px] max-w-[400px] border-r border-gray-200 dark:border-[#222e35] flex flex-col bg-white dark:bg-[#111b21] overflow-hidden transition-colors">
-      
+    // Width and display come from `className` -- the parent decides whether this
+    // pane is on screen at the current breakpoint.
+    <div className={`${className} border-r border-gray-200 dark:border-[#222e35] flex-col bg-white dark:bg-[#111b21] overflow-hidden transition-colors`}>
+
       <div className="h-[60px] flex items-center justify-between px-4 mt-2 flex-shrink-0">
         <div className="flex items-center gap-3">
           {/* Default Anonymous User PFP */}
@@ -39,7 +41,10 @@ export default function Sidebar({ lastMessage, isDarkMode, toggleTheme }) {
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="flex items-center px-3 py-3 bg-[#f5f6f6] dark:bg-[#2a3942] cursor-pointer hover:bg-[#f0f2f5] dark:hover:bg-[#202c33] transition-colors rounded-lg mx-2 my-1">
+        <div
+          onClick={onSelectChat}
+          className="flex items-center px-3 py-3 bg-[#f5f6f6] dark:bg-[#2a3942] cursor-pointer hover:bg-[#f0f2f5] dark:hover:bg-[#202c33] transition-colors rounded-lg mx-2 my-1"
+        >
           {/* Fixed Logo Padding */}
           <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center bg-[#00a884] dark:bg-[#00a884] flex-shrink-0">
             <img src="/favicon.svg" alt="Contexta Health" className="w-full h-full object-cover" />
