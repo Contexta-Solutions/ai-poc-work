@@ -26,6 +26,133 @@ BASE_TEMPLATES = {
     "PED-ARI": "Acute Respiratory Infection (Pediatric)",
 }
 
+# One ready-to-read example dictation per orthopaedic template, surfaced in the
+# Template Library ("Load into dictation"). Each names the diagnosis clearly so
+# the extractor picks that base_template, states real values for the template's
+# presentation slots so they visibly fill in, and mentions the lead medicine so
+# the prescription section populates too. Authored to spoken-note style, kept in
+# sync with each template's chief-complaint / slot lines above.
+SAMPLE_DICTATIONS = {
+    "ORT-TKR": (
+        "Sixty-two year old lady with bilateral knee pain for two years. Morning "
+        "stiffness more than thirty minutes, difficulty climbing stairs, reduced "
+        "walking distance under two hundred metres. On examination varus deformity "
+        "both knees with fixed flexion of ten degrees, crepitus on movement, ROM "
+        "zero to ninety degrees. X-ray shows Grade 4 osteoarthritis with joint space "
+        "loss. Planning total knee replacement. Prescribe Tab Etoricoxib 90mg once "
+        "daily for five days after food. Review with X-ray at two weeks."
+    ),
+    "ORT-THR": (
+        "Fifty-eight year old man with right hip pain radiating to groin for one "
+        "year, limp while walking, pain on weight bearing and restricted hip "
+        "movement. On examination antalgic gait, positive Trendelenburg, fixed "
+        "flexion deformity of fifteen degrees. X-ray shows joint space loss and "
+        "femoral head collapse. Candidate for total hip replacement. Prescribe Tab "
+        "Etoricoxib 90mg once daily for five days after food. Review with X-ray at "
+        "two weeks."
+    ),
+    "ORT-CSPN": (
+        "Forty-five year old with neck pain for three months, stiffness on movement, "
+        "radiating pain to the right arm and tingling in the fingers. Spurling's test "
+        "positive on the right side. X-ray shows disc space narrowing and osteophytes. "
+        "Impression cervical spondylosis with early radiculopathy. Prescribe Tab "
+        "Aceclofenac plus Paracetamol twice daily for five days after food. Review in "
+        "four weeks if no improvement."
+    ),
+    "ORT-LSPN": (
+        "Fifty year old with low back pain for six months, stiffness on bending "
+        "forward, pain worse with prolonged sitting and no radiation to the legs. "
+        "Straight leg raise negative bilaterally. X-ray shows disc space narrowing "
+        "and marginal osteophytes. Mechanical low back pain. Prescribe Tab Aceclofenac "
+        "plus Paracetamol twice daily for five days after food. Review in four weeks, "
+        "MRI if symptoms persist beyond six weeks."
+    ),
+    "ORT-ACLR": (
+        "Twenty-six year old with right knee instability for three months, giving-way "
+        "sensation while walking, swelling after a sports injury and difficulty running "
+        "and pivoting. History of twisting injury during sports three months back. "
+        "Lachman and anterior drawer positive. MRI confirms ACL tear. Planning ACL "
+        "reconstruction. Prescribe Tab Etoricoxib 90mg once daily for five days after "
+        "food. Review at two weeks with clinical assessment."
+    ),
+    "ORT-MENI": (
+        "Thirty-four year old with left knee pain for two months, clicking sound on "
+        "movement, occasional locking of the knee and swelling after prolonged "
+        "activity. McMurray test positive. MRI shows a medial meniscus tear. Planning "
+        "arthroscopic meniscus repair. Prescribe Tab Aceclofenac plus Paracetamol "
+        "twice daily for five days after food. Review at two weeks post-procedure."
+    ),
+    "ORT-RCUF": (
+        "Fifty-two year old with right shoulder pain for four months, worse with "
+        "overhead activity, night pain disturbing sleep and weakness in the arm. "
+        "Failed conservative treatment for three months. Positive drop arm test. MRI "
+        "shows a supraspinatus tear. Planning rotator cuff repair. Prescribe Tab "
+        "Etoricoxib 90mg once daily for five days after food. Review at two weeks "
+        "post-procedure."
+    ),
+    "ORT-ANKS": (
+        "Twenty-eight year old with right ankle pain and swelling after a twisting "
+        "injury, difficulty bearing weight and bruising over the lateral ankle. Grade "
+        "2 lateral ankle ligament sprain. Advise ankle brace for three weeks. Prescribe "
+        "Tab Aceclofenac plus Paracetamol twice daily for five days after food. Review "
+        "in one week if pain persists."
+    ),
+    "ORT-FSF": (
+        "Thirty year old man with severe left thigh pain after a road traffic accident, "
+        "inability to bear weight, visible deformity and swelling of the thigh. History "
+        "of road traffic accident one day back. X-ray shows a midshaft femur fracture. "
+        "Planning intramedullary nailing. Prescribe Tab Etoricoxib 90mg once daily for "
+        "five days after food. Review at six weeks with X-ray for union check."
+    ),
+    "ORT-FDR": (
+        "Fifty-five year old lady with right wrist pain and swelling after a fall, "
+        "dinner-fork deformity, inability to move the wrist and pain on gripping. X-ray "
+        "confirms a distal radius fracture. Closed reduction done and below-elbow cast "
+        "applied. Prescribe Tab Aceclofenac plus Paracetamol twice daily for five days "
+        "after food. Cast check at one week, review with X-ray at four weeks."
+    ),
+    "ORT-FNF": (
+        "Seventy year old lady with right hip pain after a fall at home, inability to "
+        "walk or bear weight, shortening of the right limb which is externally rotated. "
+        "History of fall at home two days back. X-ray shows a displaced neck of femur "
+        "fracture. Planning hemiarthroplasty. Prescribe Tab Etoricoxib 90mg once daily "
+        "for five days after food. Review at six weeks with X-ray and mobility "
+        "assessment, bone health review at three months."
+    ),
+    "ORT-PIVD": (
+        "Forty year old with low back pain radiating to the left leg for two months, "
+        "numbness and tingling in the leg, weakness while walking on toes and pain "
+        "worse on sitting and bending. Failed conservative treatment for six weeks. "
+        "Straight leg raise positive on the left at forty degrees. MRI shows an L4-L5 "
+        "disc prolapse. Prescribe Tab Aceclofenac plus Paracetamol twice daily for "
+        "five days after food. Review in two weeks, surgical opinion if no improvement "
+        "in four weeks."
+    ),
+    "ORT-FRSH": (
+        "Fifty-five year old known diabetic with progressive right shoulder stiffness "
+        "for four months, pain worse at night and difficulty reaching overhead and "
+        "behind the back. Known type 2 diabetes for eight years. Restricted external "
+        "rotation and abduction. Impression adhesive capsulitis. Prescribe Tab "
+        "Aceclofenac plus Paracetamol twice daily for five days after food. Review in "
+        "four weeks."
+    ),
+    "ORT-CTS": (
+        "Forty-two year old with numbness and tingling in the right thumb, index and "
+        "middle finger, night-time hand pain disturbing sleep, weakness of grip, worse "
+        "with repetitive wrist activity. Gradual onset hand numbness over three months. "
+        "Tinel's and Phalen's tests positive. Prescribe Tab Aceclofenac plus Paracetamol "
+        "twice daily for five days after food. Review in four weeks, surgical release "
+        "if no improvement in six weeks."
+    ),
+    "ORT-PLFA": (
+        "Forty-eight year old with right heel pain worse with the first steps in the "
+        "morning, pain after prolonged standing and tenderness at the heel. Symptoms "
+        "for three months. Advise heel cushion and stretching exercises. Prescribe Tab "
+        "Aceclofenac plus Paracetamol twice daily for five days after food. Review in "
+        "four weeks if no improvement."
+    ),
+}
+
 # ==========================================================================
 # ORTHOPEDICS -- transcribed verbatim from "ortho templates_6699.md".
 #

@@ -56,104 +56,313 @@ const ContextaIcon = () => (
   </svg>
 );
 
-const TemplateLibrary = ({ onBack }) => {
-  const specialties = [
-    {
-      name: "Orthopedics",
-      diagnosis: "Total Knee Replacement (TKR)",
-      rxGroups: [
-        { name: "Standard", trigger: "standard, TKR prescription" },
-        { name: "Plantar Fascia", trigger: "plantar fascia, plantar" },
-        { name: "High Pain", trigger: "high pain, severe pain, pain score > 7" }
-      ],
-      fuGroups: ["Post-operative (Wound review, X-ray)", "Conservative (Review, MRI if no improvement)"]
-    },
-    {
-      name: "Diabetology",
-      diagnosis: "Type 2 Diabetes Mellitus (T2DM)",
-      rxGroups: [
-        { name: "Metformin based", trigger: "metformin, standard" },
-        { name: "SGLT2 add-on", trigger: "SGLT2, empagliflozin, cardiac history" },
-        { name: "Insulin initiation", trigger: "insulin, poorly controlled, HbA1c > 10" }
-      ],
-      fuGroups: ["Routine review (HbA1c at 3 months)", "Intensive monitoring (Sugar diary)"]
-    },
-    {
-      name: "Pulmonology",
-      diagnosis: "Bronchial Asthma",
-      rxGroups: [
-        { name: "Mild intermittent", trigger: "mild, intermittent" },
-        { name: "Moderate persistent", trigger: "moderate, persistent, MMRC 2+" },
-        { name: "Acute exacerbation", trigger: "acute, exacerbation, SpO2 < 92" }
-      ],
-      fuGroups: ["Stable asthma (Review with PFT)", "Post exacerbation (Review in 1 week, CXR)"]
-    },
-    {
-      name: "Pediatrics",
-      diagnosis: "Acute Respiratory Infection (ARI)",
-      rxGroups: [
-        { name: "Viral, no antibiotic", trigger: "viral, no antibiotic" },
-        { name: "Bacterial, with antibiotic", trigger: "bacterial, antibiotic, throat congested" },
-        { name: "With bronchospasm", trigger: "bronchospasm, wheeze, SpO2 < 95" }
-      ],
-      fuGroups: ["Routine review (Review in 3 days)", "Respiratory concern (Check SpO2 in 24-48 hrs)"]
-    }
-  ];
+// Renders a template line, styling any "___" dictation blank so a doctor can
+// see at a glance which values the voice note is expected to fill in.
+const TemplateLine = ({ text }) => {
+  const parts = (text || '').split('___');
+  return (
+    <span className="text-[13.5px] leading-relaxed text-slate-700">
+      {parts.map((part, i) => (
+        <React.Fragment key={i}>
+          {part}
+          {i < parts.length - 1 && (
+            <span className="inline-block mx-1 px-1.5 py-px text-[11px] font-semibold text-amber-600 bg-amber-50 border border-dashed border-amber-300 rounded align-middle">
+              ___
+            </span>
+          )}
+        </React.Fragment>
+      ))}
+    </span>
+  );
+};
+
+// One prescription, laid out as a compact card so the 6-column Rx schema stays
+// readable on a phone (chips wrap) instead of overflowing a wide table.
+const RxPreviewCard = ({ rx }) => {
+  const chips = [
+    rx.dosage && { label: 'Dose', value: rx.dosage },
+    rx.frequency && { label: 'Freq', value: rx.frequency },
+    rx.duration && { label: 'Duration', value: rx.duration },
+  ].filter(Boolean);
+  return (
+    <div className="bg-white rounded-lg border border-emerald-100 p-3">
+      <p className="text-[13.5px] font-semibold text-slate-800">{rx.drug}</p>
+      {rx.composition && (
+        <p className="text-[11.5px] text-slate-400 mt-0.5">{rx.composition}</p>
+      )}
+      {chips.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {chips.map((c, i) => (
+            <span key={i} className="inline-flex items-baseline gap-1 text-[11px] bg-emerald-50 border border-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md">
+              <span className="text-emerald-400 font-medium uppercase tracking-wide text-[9px]">{c.label}</span>
+              {c.value}
+            </span>
+          ))}
+        </div>
+      )}
+      {rx.instructions && (
+        <p className="text-[11.5px] text-slate-500 italic mt-1.5">{rx.instructions}</p>
+      )}
+    </div>
+  );
+};
+
+// One section (Chief Complaint, Examination, Prescription, ...) inside an
+// expanded template card. Colour + icon come from the shared sectionThemes.
+const TemplateSection = ({ section }) => {
+  const theme = sectionThemes[section.key] || sectionThemes.plan;
+  return (
+    <div className={section.key === 'prescription' ? 'md:col-span-2' : ''}>
+      <div className={`inline-flex items-center gap-1.5 mb-2.5 px-2.5 py-1 rounded-lg ${theme.bg} ${theme.border} border`}>
+        <svg className={`w-3.5 h-3.5 ${theme.text}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={theme.icon} />
+        </svg>
+        <span className={`text-[11px] font-bold uppercase tracking-wider ${theme.text}`}>{section.label}</span>
+      </div>
+      {section.kind === 'rx' ? (
+        <div className="space-y-2">
+          {section.items.map((rx, i) => <RxPreviewCard key={i} rx={rx} />)}
+        </div>
+      ) : (
+        <ul className="space-y-1.5">
+          {section.items.map((item, i) => (
+            <li key={i} className="flex items-start gap-2">
+              <span className={`mt-[7px] w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.slot ? 'bg-amber-400' : 'bg-slate-300'}`} />
+              <TemplateLine text={item.text} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+const TemplateLibrary = ({ onBack, onUseSample }) => {
+  const [templates, setTemplates] = useState(null); // null = loading
+  const [loadError, setLoadError] = useState(false);
+  const [query, setQuery] = useState('');
+  const [openId, setOpenId] = useState(null);
+  const listRef = useRef(null);
+
+  // Keyboard navigation: ↑/↓/Home/End move focus between the card headers;
+  // Enter/Space is handled natively by each header <button> (toggles it open).
+  const handleListKeyDown = (e) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    const cards = Array.from(listRef.current?.querySelectorAll('button[data-tpl-card]') || []);
+    if (cards.length === 0) return;
+    const current = cards.indexOf(document.activeElement);
+    if (current === -1) return; // focus isn't on a card yet
+    e.preventDefault();
+    let next = current;
+    if (e.key === 'ArrowDown') next = Math.min(current + 1, cards.length - 1);
+    else if (e.key === 'ArrowUp') next = Math.max(current - 1, 0);
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = cards.length - 1;
+    cards[next].focus();
+  };
+
+  const loadTemplates = () => {
+    setTemplates(null);
+    setLoadError(false);
+    fetch(`${API_URL}/api/templates`)
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error('bad status'))))
+      .then(d => setTemplates(d.templates || []))
+      .catch(() => setLoadError(true));
+  };
+
+  useEffect(() => { loadTemplates(); }, []);
+
+  const q = query.trim().toLowerCase();
+  const filtered = (templates || []).filter(t =>
+    !q ||
+    t.name.toLowerCase().includes(q) ||
+    (t.icd10 || '').toLowerCase().includes(q) ||
+    t.id.toLowerCase().includes(q)
+  );
 
   return (
-    <div className="w-full bg-white/90 backdrop-blur-sm p-6 md:p-8 shadow-lg shadow-slate-200/40 border border-white/80 rounded-2xl h-[calc(100vh-7.5rem)] overflow-y-auto">
-      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-          <span className="bg-gradient-to-br from-teal-500 to-teal-600 text-white p-2.5 rounded-xl shadow-sm">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-          </span>
-          Template Library
-        </h2>
-        <button onClick={onBack} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-200 transition-all flex items-center gap-2">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-          Back to Dictation
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {specialties.map((spec, idx) => (
-          <div key={idx} className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[10px] uppercase font-bold text-teal-700 tracking-widest bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md">{spec.name}</span>
-            </div>
-            <h3 className="text-lg font-bold text-slate-800 mb-4">{spec.diagnosis}</h3>
-            
-            <div className="mb-4">
-              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Prescription Triggers (Rx)</h4>
-              <div className="space-y-2">
-                {spec.rxGroups.map((rx, rIdx) => (
-                  <div key={rIdx} className="bg-white p-3 rounded-lg border border-slate-200 text-sm">
-                    <span className="font-semibold text-slate-700">{rx.name}</span>
-                    <p className="text-xs text-slate-500 mt-1">Say: <span className="text-emerald-600 font-medium">"{rx.trigger}"</span></p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Follow-up Plans</h4>
-              <ul className="list-disc list-inside space-y-1 text-sm text-slate-600 bg-white p-3 rounded-lg border border-slate-200">
-                {spec.fuGroups.map((fu, fIdx) => (
-                  <li key={fIdx}>{fu}</li>
-                ))}
-              </ul>
+    <div className="w-full bg-white/90 backdrop-blur-sm p-4 sm:p-6 md:p-8 shadow-lg shadow-slate-200/40 border border-white/80 rounded-2xl h-auto lg:h-[calc(100vh-7.5rem)] lg:overflow-y-auto">
+      {/* Header: title + count on the left, Back on the right, search below. */}
+      <div className="border-b border-slate-100 pb-4 mb-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="bg-gradient-to-br from-teal-500 to-teal-600 text-white p-2.5 rounded-xl shadow-sm flex-shrink-0">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 truncate">Template Library</h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {templates ? `${templates.length} orthopaedic templates` : 'Orthopaedic clinical templates'} · tap to expand
+              </p>
             </div>
           </div>
-        ))}
+          <button onClick={onBack} className="px-3 sm:px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-200 transition-all flex items-center gap-2 flex-shrink-0">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            <span className="hidden sm:inline">Back to Dictation</span>
+          </button>
+        </div>
+
+        {templates && templates.length > 0 && (
+          <div className="mt-4 flex items-center gap-3">
+            <div className="relative flex-1">
+              <svg className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <input
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search by name, diagnosis or ICD-10 code…"
+                className="w-full border border-slate-200 rounded-xl pl-9 pr-9 py-2.5 text-sm bg-white outline-none text-slate-700 shadow-sm focus:border-teal-400 focus:ring-2 focus:ring-teal-500/10 transition-all"
+              />
+              {query && (
+                <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              )}
+            </div>
+            {/* Keyboard-nav hint (desktop only). */}
+            <p className="hidden lg:flex items-center gap-1.5 text-[11px] text-slate-400 whitespace-nowrap flex-shrink-0">
+              <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-500 font-sans">↑</kbd>
+              <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-500 font-sans">↓</kbd>
+              navigate
+              <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-500 font-sans ml-1">↵</kbd>
+              expand
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* Loading */}
+      {templates === null && !loadError && (
+        <div className="space-y-3">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-16 rounded-xl bg-slate-100 animate-pulse" />
+          ))}
+        </div>
+      )}
+
+      {/* Error */}
+      {loadError && (
+        <div className="text-center py-16">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-rose-50 text-rose-500 mb-3">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z" /></svg>
+          </div>
+          <p className="text-sm font-medium text-slate-600">Couldn't load templates.</p>
+          <p className="text-xs text-slate-400 mt-1">Check the backend connection and try again.</p>
+          <button onClick={loadTemplates} className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700 transition-all">
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Empty search */}
+      {templates && filtered.length === 0 && (
+        <div className="text-center py-16 text-slate-400">
+          <p className="text-sm font-medium">No templates match “{query}”.</p>
+        </div>
+      )}
+
+      {/* List */}
+      {templates && filtered.length > 0 && (
+        <div className="space-y-3" ref={listRef} onKeyDown={handleListKeyDown}>
+          {filtered.map((t, idx) => {
+            const open = openId === t.id;
+            return (
+              <div
+                key={t.id}
+                className={`rounded-xl border transition-colors ${open ? 'border-teal-300 bg-teal-50/30 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+              >
+                <button
+                  data-tpl-card
+                  onClick={() => setOpenId(open ? null : t.id)}
+                  aria-expanded={open}
+                  className="w-full flex items-center gap-3 sm:gap-4 p-3.5 sm:p-4 text-left rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/50 focus-visible:ring-offset-1"
+                >
+                  <span className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold ${open ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                    {idx + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-[15px] font-bold text-slate-800 truncate">{t.name}</h3>
+                      <span className="text-[10px] font-mono font-semibold text-slate-400 bg-slate-100 border border-slate-200 px-1.5 py-px rounded">{t.id}</span>
+                    </div>
+                    {t.icd10 && <p className="text-xs text-slate-500 truncate mt-0.5">{t.icd10}</p>}
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
+                    {t.slot_count > 0 && (
+                      <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md whitespace-nowrap">{t.slot_count} fields</span>
+                    )}
+                    {t.rx_count > 0 && (
+                      <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md whitespace-nowrap">{t.rx_count} Rx</span>
+                    )}
+                  </div>
+                  <svg className={`w-5 h-5 text-slate-400 flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {/* Height animation: grid-rows 0fr→1fr glides the panel open/
+                    closed without measuring. Content stays mounted; the inner
+                    overflow-hidden wrapper is what actually clips it. */}
+                <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                  <div className="overflow-hidden">
+                    <div className="px-3.5 sm:px-4 pb-4 pt-1 border-t border-teal-100/70">
+                      {/* Example dictation — the demo's on-ramp: load it into the
+                          dictation box, hit Extract, and watch this template fill. */}
+                      {t.sample_dictation && (
+                        <div className="mt-3 rounded-xl border border-teal-200 bg-teal-50/50 p-3 sm:p-3.5">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700 flex items-center gap-1.5">
+                              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                              Example dictation
+                            </span>
+                            <button
+                              onClick={() => onUseSample?.(t.sample_dictation)}
+                              className="w-full sm:w-auto px-3 py-2 sm:py-1.5 bg-teal-600 text-white rounded-lg text-xs font-semibold hover:bg-teal-700 active:scale-[0.97] transition-all flex items-center justify-center gap-1.5 flex-shrink-0 shadow-sm"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16" /></svg>
+                              Load into dictation
+                            </button>
+                          </div>
+                          <p className="text-[13px] text-slate-600 italic leading-relaxed">“{t.sample_dictation}”</p>
+                        </div>
+                      )}
+                      {/* Mobile badges (hidden in the header row on small screens). */}
+                      <div className="flex sm:hidden items-center gap-1.5 mt-3 mb-1">
+                        {t.slot_count > 0 && (
+                          <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">{t.slot_count} dictated fields</span>
+                        )}
+                        {t.rx_count > 0 && (
+                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">{t.rx_count} medications</span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 mt-3">
+                        {t.sections.map(section => (
+                          <TemplateSection key={section.key} section={section} />
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-4 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        Amber blanks are values the dictation fills in; everything else is fixed template text.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
 
 // Renders a template line whose "___" blank(s) become inline fields. The line
 // always shows, whether or not the dictation supplied the value.
-const SlotLine = ({ item, onChange }) => {
+const SlotLine = ({ item, onChange, flash }) => {
   const parts = (item.line || '').split('___');
+  // Provenance flash (runs briefly right after extraction): green if the
+  // dictation filled this blank, amber if it was left for manual entry.
+  const flashClass = flash ? (item.value ? 'flash-filled' : 'flash-blank') : '';
   return (
     <div className="text-[14px] text-slate-700 leading-relaxed font-medium flex flex-wrap items-center">
       {parts.map((part, i) => (
@@ -166,7 +375,7 @@ const SlotLine = ({ item, onChange }) => {
               onChange={e => onChange(e.target.value)}
               placeholder="___"
               title={item.value ? 'Dictated value — click to edit' : 'Not dictated — click to fill in'}
-              className={`mx-1 px-2 py-0.5 w-24 text-[13px] text-center rounded-md border outline-none transition-all focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 ${
+              className={`mx-1 px-2 py-0.5 w-24 text-[13px] text-center rounded-md border outline-none transition-all focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400 ${flashClass} ${
                 item.value
                   ? 'bg-teal-50 border-teal-200 text-teal-800 font-semibold'
                   : 'bg-amber-50/70 border-amber-200 border-dashed text-slate-600 placeholder:text-amber-400'
@@ -227,6 +436,49 @@ const PRINT_LANGUAGES = [
   { code: 'hi', label: 'हिंदी  (Hindi)' },
 ];
 
+const WAVE_BARS = 28;
+
+// Live mic level meter. Reads the shared AnalyserNode on its own animation
+// frame and keeps its bar heights in LOCAL state, so the 60fps updates never
+// re-render the (large) parent document view — only this strip repaints.
+const RecordingWaveform = ({ analyserRef, active }) => {
+  const [levels, setLevels] = useState(() => new Array(WAVE_BARS).fill(0));
+  const rafRef = useRef(null);
+
+  useEffect(() => {
+    if (!active) {
+      setLevels(new Array(WAVE_BARS).fill(0));
+      return;
+    }
+    const loop = () => {
+      const analyser = analyserRef.current;
+      if (analyser) {
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(data);
+        const step = Math.max(1, Math.floor(data.length / WAVE_BARS));
+        const bars = [];
+        for (let i = 0; i < WAVE_BARS; i++) bars.push((data[i * step] || 0) / 255);
+        setLevels(bars);
+      }
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [active, analyserRef]);
+
+  return (
+    <div className="flex items-center justify-center gap-[3px] h-9" aria-hidden="true">
+      {levels.map((v, i) => (
+        <span
+          key={i}
+          className="w-1 rounded-full bg-gradient-to-t from-rose-500 to-rose-300"
+          style={{ height: `${Math.max(12, Math.min(100, v * 130))}%`, opacity: v > 0.03 ? 1 : 0.35 }}
+        />
+      ))}
+    </div>
+  );
+};
+
 export default function VisitNotesApp() {
   const [voiceNote, setVoiceNote] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -242,6 +494,8 @@ export default function VisitNotesApp() {
   const [doctors, setDoctors] = useState([]);
   const [printLang, setPrintLang] = useState(null); // language currently being generated
   const [showPrintMenu, setShowPrintMenu] = useState(false);
+  const [provenance, setProvenance] = useState(false); // brief post-extraction slot flash
+  const provenanceTimer = useRef(null);
   const [metadata, setMetadata] = useState(() => ({
     visit_date: new Date().toLocaleDateString('en-CA'),
     doctor: DEFAULT_DOCTOR,
@@ -261,6 +515,58 @@ export default function VisitNotesApp() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
+  // Live recording feedback: a Web Audio analyser drives the waveform, plus an
+  // elapsed-seconds timer. Both are torn down when recording stops.
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const recordTimerRef = useRef(null);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+
+  const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+
+  const startRecordingViz = (stream) => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const source = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 128;
+        analyser.smoothingTimeConstant = 0.7;
+        source.connect(analyser);
+        ctx.resume?.();
+        audioContextRef.current = ctx;
+        analyserRef.current = analyser;
+      }
+    } catch { /* waveform is optional — recording still works without it */ }
+    setRecordSeconds(0);
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    recordTimerRef.current = setInterval(() => setRecordSeconds(s => s + 1), 1000);
+  };
+
+  const stopRecordingViz = () => {
+    if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null; }
+    setRecordSeconds(0);
+    analyserRef.current = null;
+    if (audioContextRef.current) {
+      try { audioContextRef.current.close(); } catch { /* already closed */ }
+      audioContextRef.current = null;
+    }
+  };
+
+  // Drop a template's example dictation into the box and jump back to it, ready
+  // to Extract. Clears any existing document so it's a clean run.
+  const handleUseSample = (text) => {
+    setVoiceNote(text);
+    setDocumentData(null);
+    setShowTemplates(false);
+    showNotification('Sample dictation loaded — click "Extract & Fill EMR Data"', 'success');
+    setTimeout(() => {
+      const ta = document.getElementById('textarea-dictation');
+      if (ta) { ta.focus(); ta.scrollTop = ta.scrollHeight; }
+    }, 60);
+  };
+
   const showNotification = (message, type) => {
     setNotification({ show: true, message, type });
     setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
@@ -278,7 +584,8 @@ export default function VisitNotesApp() {
     // ── START recording ──
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
+      startRecordingViz(stream);
+
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/webm')
@@ -299,6 +606,7 @@ export default function VisitNotesApp() {
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(track => track.stop());
         setIsListening(false);
+        stopRecordingViz();
 
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         
@@ -350,6 +658,7 @@ export default function VisitNotesApp() {
         console.error('MediaRecorder error:', event.error);
         stream.getTracks().forEach(track => track.stop());
         setIsListening(false);
+        stopRecordingViz();
         showNotification('Recording error. Please try again.', 'error');
       };
 
@@ -359,6 +668,7 @@ export default function VisitNotesApp() {
       showNotification('🎙️ Recording... Click mic again to stop', 'success');
     } catch (err) {
       console.error('Microphone access error:', err);
+      stopRecordingViz();
       if (err.name === 'NotAllowedError') {
         showNotification('Microphone access denied. Please allow mic access in browser settings.', 'error');
       } else {
@@ -388,6 +698,12 @@ export default function VisitNotesApp() {
       }
       const data = await res.json();
       setDocumentData(data);
+      // Provenance flash: light up the slots the AI just filled vs left blank,
+      // then settle back to normal styling. Restart cleanly on re-analyze.
+      if (provenanceTimer.current) clearTimeout(provenanceTimer.current);
+      setProvenance(false);
+      requestAnimationFrame(() => setProvenance(true));
+      provenanceTimer.current = setTimeout(() => setProvenance(false), 2600);
       showNotification('Extraction successful', 'success');
     } catch (e) {
       showNotification(e.message || 'Failed to process. Check backend connection.', 'error');
@@ -440,6 +756,60 @@ export default function VisitNotesApp() {
       showNotification(e.message || 'Failed to generate PDF.', 'error');
     } finally {
       setPrintLang(null);
+    }
+  };
+
+  // Serialize the live document to plain text, in the same section order it's
+  // shown on screen, so it can be pasted straight into an existing EMR.
+  const buildNoteText = () => {
+    if (!documentData?.document) return '';
+    const doc = documentData.document;
+    const lines = [
+      `Patient: ${metadata.patient || '—'}`,
+      `Visit Date: ${metadata.visit_date}`,
+      `Doctor: ${metadata.doctor || '—'}`,
+    ];
+    if (documentData.template_id) lines.push(`Template: ${documentData.template_id}`);
+    lines.push('');
+
+    Object.keys(systemAttributeHeaders).forEach(sectionKey => {
+      const items = doc[sectionKey];
+      if (!items || items.length === 0) return;
+      lines.push(`${systemAttributeHeaders[sectionKey].toUpperCase()}`);
+      items.forEach(item => {
+        const text = (item.rendered_line || '').trim();
+        if (text) lines.push(`  - ${text}`);
+      });
+      lines.push('');
+    });
+
+    return lines.join('\n').trim() + '\n';
+  };
+
+  const handleCopyText = async () => {
+    const text = buildNoteText();
+    if (!text.trim()) return;
+    const ok = async () => showNotification('Note copied to clipboard', 'success');
+    try {
+      await navigator.clipboard.writeText(text);
+      return ok();
+    } catch {
+      // Fallback for non-secure contexts / older browsers where the async
+      // Clipboard API is unavailable.
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok();
+      } catch {
+        showNotification('Could not copy to clipboard', 'error');
+      }
     }
   };
 
@@ -564,6 +934,7 @@ export default function VisitNotesApp() {
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
             <button
+              id="btn-templates"
               onClick={() => setShowTemplates(!showTemplates)}
               className={`px-3 sm:px-4 py-2 border rounded-xl text-sm font-semibold shadow-sm transition-all flex items-center gap-2 ${showTemplates ? 'bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'}`}
             >
@@ -577,6 +948,17 @@ export default function VisitNotesApp() {
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
               <span className="hidden sm:inline">New Patient</span>
+            </button>
+            {/* Copy the note as plain text, for pasting into an existing EMR. */}
+            <button
+              id="btn-copy-text"
+              onClick={handleCopyText}
+              disabled={!documentData}
+              title="Copy note as text"
+              className="px-3 sm:px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 text-sm font-semibold hover:bg-slate-50 hover:border-slate-300 shadow-sm transition-all active:scale-[0.97] flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-slate-200"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+              <span className="hidden sm:inline">Copy</span>
             </button>
             {/* Print / download the note as a PDF, in the patient's language.
                 Always sends the document as it currently stands on screen. */}
@@ -641,7 +1023,7 @@ export default function VisitNotesApp() {
       <main className="flex-1 p-3 sm:p-4 lg:p-6 flex flex-col-reverse lg:flex-row gap-4 lg:gap-5 max-w-[1800px] mx-auto w-full min-w-0">
 
         {showTemplates ? (
-          <TemplateLibrary onBack={() => setShowTemplates(false)} />
+          <TemplateLibrary onBack={() => setShowTemplates(false)} onUseSample={handleUseSample} />
         ) : (
           <>
             {/* ─── LEFT PANEL: Document View ─── */}
@@ -747,6 +1129,15 @@ export default function VisitNotesApp() {
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Provenance legend — appears briefly after extraction to explain
+                  the slot flash so viewers can see what the AI pulled out. */}
+              {provenance && (
+                <div className="template-reveal flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
+                  <span className="font-semibold text-slate-600">Extracted from your dictation:</span>
+                  <span className="flex items-center gap-1.5 text-slate-500"><span className="w-2.5 h-2.5 rounded bg-emerald-400" /> filled from voice</span>
+                  <span className="flex items-center gap-1.5 text-slate-500"><span className="w-2.5 h-2.5 rounded bg-amber-400" /> not dictated — fill manually</span>
+                </div>
+              )}
               {Object.keys(systemAttributeHeaders).map(sectionKey => {
                 const items = documentData.document[sectionKey];
                 const hasItems = items && items.length > 0;
@@ -808,6 +1199,7 @@ export default function VisitNotesApp() {
                                           <SlotLine
                                             item={{ line: item.dose, value: item.value }}
                                             onChange={val => handleSlotChange(sectionKey, idx, val)}
+                                            flash={provenance}
                                           />
                                         ) : (
                                           <RxCell
@@ -899,7 +1291,7 @@ export default function VisitNotesApp() {
                               /* ── VIEW MODE ── */
                               <>
                                 {isSlot ? (
-                                  <SlotLine item={item} onChange={val => handleSlotChange(sectionKey, idx, val)} />
+                                  <SlotLine item={item} onChange={val => handleSlotChange(sectionKey, idx, val)} flash={provenance} />
                                 ) : (
                                   <div className="text-[14px] text-slate-700 leading-relaxed font-medium">
                                     {item.rendered_line}
@@ -1029,12 +1421,19 @@ export default function VisitNotesApp() {
               </button>
             </div>
             
+            {/* Live recording feedback: level meter + elapsed timer */}
+            {isListening && (
+              <div className="px-2 -mt-1">
+                <RecordingWaveform analyserRef={analyserRef} active={isListening} />
+              </div>
+            )}
+
             {/* Status Text */}
             <div className="text-center font-semibold text-xs transition-colors">
               {isListening ? (
-                <span className="text-rose-500 animate-pulse flex items-center justify-center gap-1.5">
+                <span className="text-rose-500 flex items-center justify-center gap-1.5">
                   <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping"></span>
-                  Recording... Click mic to stop
+                  Recording <span className="tabular-nums">{fmtTime(recordSeconds)}</span> · Click mic to stop
                 </span>
               ) : (
                 <span className="text-slate-400">Tap microphone to start dictating</span>
