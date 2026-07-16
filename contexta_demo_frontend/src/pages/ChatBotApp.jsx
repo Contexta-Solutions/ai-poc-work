@@ -13,10 +13,10 @@ export default function ChatBotApp() {
   // From `md` up both panes are on screen at once and this is ignored.
   const [mobileView, setMobileView] = useState('chat'); // 'chat' | 'list'
   const initialMessage = {
-    id: 1, 
-    text: "Hi Jay! 👋 \nI can help you book an appointment, find a doctor, or answer any questions you might have about our hospital. How can I assist you today?", 
-    sender: 'bot', 
-    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+    id: 1,
+    text: "Hi Jay! 👋 Welcome to OrthoCare Clinic.\n\nI can help you with:\n📅 Book a doctor appointment\n📍 Clinic locations & addresses\n🕐 Doctor availability & timings\n🩻 Lab/diagnostic timings (X-ray, Blood work, Ultrasound, MRI, CT)\n☎️ Contact person & phone for each branch\n\nJust let me know what you're looking for!",
+    sender: 'bot',
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   };
   const [messages, setMessages] = useState([initialMessage]);
 

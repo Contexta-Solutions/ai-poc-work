@@ -20,10 +20,21 @@ const formatMessage = (text) => {
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || '';
 
+// Tappable starter prompts shown on a fresh conversation. `label` is what the
+// patient sees; `text` is the actual message sent to the bot.
+const QUICK_REPLIES = [
+  { label: '📅 Book appointment', text: 'I want to book an appointment' },
+  { label: '📍 Locations', text: 'What are your clinic locations and addresses?' },
+  { label: '🕐 Doctor timings', text: 'Show me the doctors and their availability' },
+  { label: '🩻 Lab & scan timings', text: 'What are the lab and scan (X-ray, MRI, CT) timings?' },
+  { label: '📋 My appointment', text: 'What appointments do I have booked?' },
+];
+
 export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMode, onNewPatient, className = '', onBack }) {
   const [inputValue, setInputValue] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+  const [isBotTyping, setIsBotTyping] = useState(false);
 
   const messagesEndRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -42,7 +53,7 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isBotTyping]);
 
   // Focus textarea after transcription completes and textarea is re-enabled
   useEffect(() => {
@@ -56,12 +67,14 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
     }
   }, [isProcessingAudio]);
 
-  const handleSend = async () => {
-    if (!inputValue.trim()) return;
+  const handleSend = async (overrideText) => {
+    // overrideText comes from a quick-reply chip; a click event (from the send
+    // button) isn't a string, so it falls back to the typed input.
+    const userText = (typeof overrideText === 'string' ? overrideText : inputValue).trim();
+    if (!userText) return;
 
-    const userText = inputValue.trim();
     const newUserMsg = {
-      id: Date.now(), text: userText, sender: 'user', 
+      id: Date.now(), text: userText, sender: 'user',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -72,11 +85,12 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
 
     setMessages(prev => [...prev, newUserMsg]);
     setInputValue('');
-    
+
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
 
+    setIsBotTyping(true);
     try {
       const response = await fetch(`${BACKEND_URL}/api/chat`, {
         method: 'POST',
@@ -87,13 +101,13 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
           language: detectedLanguageRef.current
         })
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.detail || "Unknown server error");
       }
-      
+
       setMessages(prev => [...prev, {
         id: Date.now() + 1, text: data.reply, sender: 'bot',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -104,6 +118,8 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
         id: Date.now() + 1, text: ` System Error: ${error.message}`, sender: 'bot',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
+    } finally {
+      setIsBotTyping(false);
     }
   };
 
@@ -262,8 +278,35 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
             </div>
           </div>
         ))}
+
+        {isBotTyping && (
+          <div className="flex justify-start">
+            <div className="px-3.5 py-3 bg-white dark:bg-[#202c33] rounded-lg rounded-tl-none shadow-sm">
+              <div className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Quick-reply starter chips -- only on a fresh chat, to nudge the patient. */}
+      {messages.length <= 1 && !isRecording && !isProcessingAudio && !isBotTyping && (
+        <div className="z-10 flex-shrink-0 flex gap-2 overflow-x-auto px-2 sm:px-4 pb-1 pt-1 no-scrollbar">
+          {QUICK_REPLIES.map((q) => (
+            <button
+              key={q.label}
+              onClick={() => handleSend(q.text)}
+              className="whitespace-nowrap flex-shrink-0 text-[13px] px-3 py-1.5 rounded-full border border-[#00a884]/40 text-[#008069] dark:text-[#46c2a8] bg-white dark:bg-[#202c33] hover:bg-[#f0f2f5] dark:hover:bg-[#2a3942] transition-colors shadow-sm"
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="bg-[#f0f2f5] dark:bg-[#202c33] flex-shrink-0 flex items-end px-2 sm:px-4 py-2 sm:py-3 z-10 transition-colors">
         <div className="flex-1 min-w-0 bg-white dark:bg-[#2a3942] rounded-lg flex items-center px-3 shadow-sm py-2 transition-colors border border-transparent focus-within:border-gray-300 dark:focus-within:border-gray-600">

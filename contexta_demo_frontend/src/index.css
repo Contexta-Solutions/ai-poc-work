@@ -162,3 +162,35 @@ html.dark #root {
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out forwards;
 }
+
+/* Horizontal scroll without a visible scrollbar (quick-reply chip row). */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* ─── Template Library accordion reveal ─── */
+@keyframes templateReveal {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.template-reveal {
+  animation: templateReveal 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ─── Provenance flash: shows which slots the AI filled vs left blank ───
+   Runs a few times right after extraction, then settles back to the
+   input's normal styling. */
+@keyframes flashFilled {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  50%      { box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.45); }
+}
+@keyframes flashBlank {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+  50%      { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.5); }
+}
+.flash-filled { animation: flashFilled 0.8s ease-in-out 3; }
+.flash-blank  { animation: flashBlank 0.8s ease-in-out 3; }
+
+@media (prefers-reduced-motion: reduce) {
+  .flash-filled, .flash-blank { animation: none; }
+}
