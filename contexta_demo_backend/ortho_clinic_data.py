@@ -9,19 +9,10 @@ Sample/POC data -- names, numbers, addresses and schedules are fictional
 placeholders. Replace with real clinic data before production use.
 """
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
-
-# The clinic runs on Hyderabad time, and every hour/day in this file is IST.
-# Deployed on Vercel the server's own clock is UTC, so a bare datetime.now()
-# reads ~5h30m behind and silently breaks "is it open right now", "today",
-# "tomorrow", and the past-date guard. Always take the clock from clinic_now().
-CLINIC_TZ = ZoneInfo("Asia/Kolkata")
-
-
-def clinic_now() -> datetime:
-    """Current date/time at the clinic (IST), independent of the server's tz."""
-    return datetime.now(CLINIC_TZ)
+# Every hour/day in this file is clinic-local (IST). The clock itself lives in
+# clinic_time.py so Visit Notes can share it; re-exported here because the
+# ChatBot modules import it alongside this file's data.
+from clinic_time import CLINIC_TZ, clinic_now  # noqa: F401  (re-export)
 
 
 # Python's date.weekday(): Monday=0 ... Sunday=6. The clinic is closed on

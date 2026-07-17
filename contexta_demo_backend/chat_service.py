@@ -1,15 +1,39 @@
+"""Claude call for the OrthoCare patient ChatBot (/chatbot).
+
+Why the prompt is split into two system blocks:
+
+Everything the bot knows -- persona, the bilingual rules, the clinic knowledge
+base, the booking state machine -- is ~4k tokens and identical on every request,
+so it is written once and then read at ~0.1x. Prompt caching is a PREFIX match,
+which is the whole reason for the split: the clock, the date table, the speech
+-detected language, live slot availability and the patient's bookings all change
+per request, and any one of them sitting in the prefix would invalidate the 4k
+behind it on every turn. So the stable half goes first with the cache breakpoint
+on it, and everything volatile goes after it, where it costs full price but is
+only ~300 tokens.
+
+_STATIC_PROMPT is built once at import for exactly this reason -- rebuilding it
+per request would risk a stray byte and silently drop the hit rate to zero.
+
+The 1h TTL (2x on the one write, vs 1.25x for the default 5m) is deliberate: the
+static half carries no patient data, so every visitor shares one cache entry.
+One write per hour serves every conversation in that hour.
+"""
+
 import os
 import anthropic
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import timedelta
 
-from chat_crud import get_all_doctors, get_locations_context
+from chat_crud import get_all_doctors, get_locations_context, get_open_now_context
 from ortho_clinic_data import DIAGNOSTICS_TEXT, DAY_NAMES, clinic_now
 
 load_dotenv()
 
 api_key = os.getenv("ANTHROPIC_API_KEY")
 client = anthropic.Anthropic(api_key=api_key) if api_key else None
+
+MODEL = "claude-sonnet-4-6"
 
 # Telugu script costs roughly 3-5x more tokens per character than English, so a
 # reply that fits comfortably in a few hundred tokens in English (listing
@@ -33,49 +57,19 @@ def _next_days(n: int = 8) -> str:
     return "\n".join(lines)
 
 
-def generate_claude_response(user_message: str, history: list,
-                            booking_context: str = "", language: str | None = None,
-                            patient_bookings: str = "") -> str:
-    if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY is missing from .env file")
+# ─── The cached half ─────────────────────────────────────────────────────────
+# Byte-stable: no clock, no per-request values, no conditional sections. Built
+# once at import. If a hit rate ever drops to zero, something leaked in here.
+_STATIC_PROMPT = f"""You are the AI Clinical Assistant for OrthoCare Multi-Speciality Clinic, an orthopaedics clinic with 3 branches in Hyderabad. (The assistant is powered by Contexta Health.)
 
-    now = clinic_now()
-    current_date = now.strftime("%A, %B %d, %Y")
-    current_time = now.strftime("%I:%M %p")
-
-    booking_section = ""
-    if booking_context:
-        booking_section = f"""
-    LIVE BOOKING AVAILABILITY (computed from the real schedule -- trust this over your own guesses):
-    {booking_context}
-"""
-
-    bookings_section = f"""
-    PATIENT'S CURRENT BOOKINGS (already in the system -- use these exact tokens; never invent one):
-    {patient_bookings}
-""" if patient_bookings else """
-    PATIENT'S CURRENT BOOKINGS: none on record yet.
-"""
-
-    detected_language_line = ""
-    if language in _LANGUAGE_NAMES:
-        detected_language_line = (
-            f"    - Speech recognition detected the patient's latest voice message as: {_LANGUAGE_NAMES[language]}. "
-            f"Treat this as a strong hint, but the patient's actual message text always wins.\n"
-        )
-
-    system_prompt = f"""You are the AI Clinical Assistant for OrthoCare Multi-Speciality Clinic, an orthopaedics clinic with 3 branches in Hyderabad. (The assistant is powered by Contexta Health.)
-
-    CURRENT DATE & TIME AT THE CLINIC: {current_date}, {current_time} IST.
-    The clinic is in Hyderabad, so every date, opening hour and booking is India Standard Time. For "is it open right now?" / "available now?" / "today" / "tomorrow" questions, use THIS exact date and time -- never invent a different clock time and never use any other timezone. Compare it against the branch/doctor hours to answer.
     THE PATIENT's NAME IS: Jay.
     Address the patient as "Jay". Keep your tone warm, friendly and human -- like a helpful clinic receptionist (e.g., "Hi Jay! How can I help?").
 
-    DATE REFERENCE (resolve relative dates like "tomorrow"/"this Friday" using this table; always book with a YYYY-MM-DD date):
-{_next_days()}
+    Everything specific to THIS request -- today's date and time, the date table, the speech-detected language, live slot availability and the patient's current bookings -- is in the LIVE CONTEXT section at the end of this prompt. Read it before answering anything time-related.
 
     LANGUAGE (CRITICAL):
-{detected_language_line}    - You speak EXACTLY TWO languages: English and Telugu. You must NEVER reply in Hindi, Gujarati, Kannada, Tamil, Marathi, Bengali, or any other language, under any circumstances.
+    - If LIVE CONTEXT reports a speech-detected language for the patient's latest voice message, treat it as a strong hint -- but the patient's actual message text always wins.
+    - You speak EXACTLY TWO languages: English and Telugu. You must NEVER reply in Hindi, Gujarati, Kannada, Tamil, Marathi, Bengali, or any other language, under any circumstances.
     - Pick which of the two by mirroring the patient:
       * Patient writes Telugu in Telugu script (e.g. "నాకు మోకాలి నొప్పి ఉంది") -> reply in Telugu script.
       * Patient writes romanized Telugu / "Tenglish" in Latin letters (e.g. "naaku mokali noppi undi", "repu appointment kavali") -> reply in romanized Telugu using Latin letters. Do NOT switch to Telugu script.
@@ -107,7 +101,7 @@ def generate_claude_response(user_message: str, history: list,
 
     DIAGNOSTIC SERVICES (reference only — the bot does NOT book these):
     {DIAGNOSTICS_TEXT}
-{booking_section}{bookings_section}
+
     ══════════ HOW TO ANSWER (BEHAVIOR RULES) ══════════
 
     - Clinic timings / address / directions / contact person / phone -> answer directly from the LOCATIONS list.
@@ -135,9 +129,9 @@ def generate_claude_response(user_message: str, history: list,
     LOGIC:
     - Symptoms only, no doctor chosen yet -> recommend the relevant orthopaedic doctor(s) with their branch, type and availability, and let the patient choose. (For a knee/hip/joint-replacement issue -> Dr. Suresh Kumar Nair; back/spine -> Dr. Kavitha Subramaniam; sports injury -> Dr. Padmaja Reddy; general ortho/trauma/fracture -> the primary doctor at the patient's preferred branch.)
     - PRIMARY doctors sit at their home branch Mon–Sat. VISITING SPECIALISTS (Dr. Suresh Kumar Nair, Dr. Kavitha Subramaniam) are only at specific branches on specific days -- offer ONLY their real branch/day combinations. If a patient asks for a visiting specialist at a branch/day they don't visit, say when/where they ARE available instead.
-    - NEVER book outside a doctor's listed availability, never on a Sunday, never during a lunch break, and NEVER on a date in the past (use the date table above; today is the earliest bookable day).
+    - NEVER book outside a doctor's listed availability, never on a Sunday, never during a lunch break, and NEVER on a date in the past (use the DATE REFERENCE table in LIVE CONTEXT; today is the earliest bookable day).
     - If the patient asks for the "earliest" / "next available" appointment and the LIVE BOOKING AVAILABILITY block gives a NEXT AVAILABLE line, offer that slot.
-    - When the LIVE BOOKING AVAILABILITY block above is present, use its OPEN times: show them to the patient and only accept a time from that list.
+    - When LIVE CONTEXT carries a LIVE BOOKING AVAILABILITY block, use its OPEN times: show them to the patient and only accept a time from that list.
     - Once you have Doctor + Location + Date + Time (+ patient name Jay) and haven't already booked this exact appointment, output the booking tag at the very END of your reply.
 
     THE BOOKING TAG (MACHINE-READ -- ENGLISH/ASCII ONLY, 5 fields):
@@ -150,7 +144,7 @@ def generate_claude_response(user_message: str, history: list,
     A tag containing Telugu script, a wrong location word, or a made-up time will be REJECTED and the patient won't get their appointment. Put the tag ONLY after you've shown the patient a normal confirmation sentence; the system replaces the tag with the formal confirmation receipt.
 
     CANCELLING & RESCHEDULING (the patient CAN do both here):
-    - Identify which appointment using the tokens under "PATIENT'S CURRENT BOOKINGS" above. If there are none listed, tell the patient you don't see any appointment on record and offer to book one -- do NOT make up a token.
+    - Identify which appointment using the tokens under "PATIENT'S CURRENT BOOKINGS" in LIVE CONTEXT. If there are none listed, tell the patient you don't see any appointment on record and offer to book one -- do NOT make up a token.
     - CANCEL: once the patient confirms which one, put this tag at the very end of your reply: <CANCEL>Token</CANCEL>
     - RESCHEDULE: collect the NEW doctor + location + date + time (same availability rules as booking), then put this tag at the very end: <RESCHEDULE>OldToken|DoctorName|Location|YYYY-MM-DD|HH:MM|PatientName</RESCHEDULE>
     - These tags are machine-read and ASCII-only, exactly like the booking tag. The system replaces the tag with the formal receipt.
@@ -161,8 +155,63 @@ def generate_claude_response(user_message: str, history: list,
 
     FORMATTING:
     - NEVER use Markdown tables (|), headings (#), blockquotes (>), or horizontal rules (---).
-    - Keep messages concise. Plain text and **bold** only. Emoji are fine in moderation.
-    """
+    - Keep messages concise. Plain text and **bold** only. Emoji are fine in moderation."""
+
+# The single cache breakpoint. Everything above it is identical on every request,
+# so it is written once and then read at ~0.1x for an hour.
+_STATIC_BLOCK = {
+    "type": "text",
+    "text": _STATIC_PROMPT,
+    "cache_control": {"type": "ephemeral", "ttl": "1h"},
+}
+
+
+def _live_context(booking_context: str, language: str | None, patient_bookings: str) -> str:
+    """The per-request half. Everything here changes turn to turn, which is
+    exactly why it sits AFTER the cache breakpoint rather than before it."""
+    now = clinic_now()
+
+    parts = [
+        "    ══════════ LIVE CONTEXT (this request) ══════════",
+        "",
+        f"    CURRENT DATE & TIME AT THE CLINIC: {now.strftime('%A, %B %d, %Y')}, {now.strftime('%I:%M %p')} IST.",
+        "    The clinic is in Hyderabad, so every date, opening hour and booking is India Standard Time. Use THIS exact date and time for anything time-related -- never invent a different clock time and never use any other timezone.",
+        "",
+        "    BRANCHES RIGHT NOW (already computed against the clock above -- for \"are you open now?\" just report this. Do NOT redo the comparison yourself; trust these states even if they look surprising):",
+        get_open_now_context(),
+        "",
+        "    DATE REFERENCE (resolve relative dates like \"tomorrow\"/\"this Friday\" using this table; always book with a YYYY-MM-DD date):",
+        _next_days(),
+    ]
+
+    if language in _LANGUAGE_NAMES:
+        parts += [
+            "",
+            f"    SPEECH-DETECTED LANGUAGE of the patient's latest voice message: {_LANGUAGE_NAMES[language]}. "
+            f"Strong hint, but the patient's actual message text always wins.",
+        ]
+
+    if booking_context:
+        parts += [
+            "",
+            "    LIVE BOOKING AVAILABILITY (computed from the real schedule -- trust this over your own guesses):",
+            f"    {booking_context}",
+        ]
+
+    parts += [
+        "",
+        "    PATIENT'S CURRENT BOOKINGS (already in the system -- use these exact tokens; never invent one):",
+        f"    {patient_bookings}" if patient_bookings else "    none on record yet.",
+    ]
+
+    return "\n".join(parts)
+
+
+def generate_claude_response(user_message: str, history: list,
+                            booking_context: str = "", language: str | None = None,
+                            patient_bookings: str = "") -> str:
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY is missing from .env file")
 
     formatted_messages = []
     for item in history[-10:]:
@@ -173,11 +222,28 @@ def generate_claude_response(user_message: str, history: list,
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-6",
+            model=MODEL,
             max_tokens=MAX_TOKENS,
-            system=system_prompt,
-            messages=formatted_messages
+            # Explicit rather than inherited: Sonnet 4.6 defaults to effort
+            # "high", which spends latency the patient feels on what is mostly
+            # a form-filling state machine over data we already computed.
+            thinking={"type": "disabled"},
+            output_config={"effort": "medium"},
+            system=[_STATIC_BLOCK, {"type": "text", "text": _live_context(
+                booking_context, language, patient_bookings)}],
+            messages=formatted_messages,
         )
-        return response.content[0].text
     except Exception as e:
         raise RuntimeError(f"Claude API Error: {str(e)}")
+
+    _log_cache(response)
+    return response.content[0].text
+
+
+def _log_cache(response) -> None:
+    """A persistent cache_read of 0 across turns means a volatile byte leaked
+    into _STATIC_PROMPT and the whole prefix is being re-billed every request."""
+    u = response.usage
+    print(f"[chat] cache_read={getattr(u, 'cache_read_input_tokens', 0) or 0} "
+          f"cache_write={getattr(u, 'cache_creation_input_tokens', 0) or 0} "
+          f"uncached_in={u.input_tokens} out={u.output_tokens}")

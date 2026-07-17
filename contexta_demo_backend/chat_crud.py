@@ -134,6 +134,34 @@ def get_all_doctors() -> str:
     return "\n".join(lines)
 
 
+def get_open_now_context() -> str:
+    """Which branches are open at this exact moment, decided here rather than
+    left to the model.
+
+    "Are you open right now?" is a question patients act on, and the model gets
+    it wrong near a boundary often enough to matter -- at 9:47 it will call a
+    10:00 branch "Open now", at either effort level. The comparison is three
+    string compares; do it in code and hand over the answer, the same way
+    get_booking_context() hands over slots instead of letting it infer them.
+    """
+    now = clinic_now()
+    weekday = now.weekday()
+    hhmm = now.strftime("%H:%M")
+
+    lines = []
+    for loc in LOCATIONS.values():
+        if weekday == 6:
+            state = "CLOSED — Sunday, every branch is closed"
+        elif hhmm < loc["open"]:
+            state = f"CLOSED — opens {_to12(loc['open'])} today"
+        elif hhmm >= loc["close"]:
+            state = f"CLOSED — shut for the day at {_to12(loc['close'])}"
+        else:
+            state = f"OPEN — until {_to12(loc['close'])} today"
+        lines.append(f"    {loc['name']}: {state}  (regular hours {loc['timings']}, Mon–Sat)")
+    return "\n".join(lines)
+
+
 def get_booking_context(doctor_name: str, location_name: str, date_str: str) -> str:
     """
     A precise, LLM-facing description of which slots are open for a given

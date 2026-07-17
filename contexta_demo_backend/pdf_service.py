@@ -21,7 +21,7 @@ never translated -- a pharmacist has to read them.
 """
 
 import os
-from datetime import datetime
+from clinic_time import clinic_now
 
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
@@ -190,7 +190,9 @@ class EMRPdf(FPDF):
         # Numeric date on purpose. An English month abbreviation ("Jul") has no
         # business in a Telugu or Hindi note, and digits are the one thing all
         # three fonts render identically.
-        stamp = datetime.now().strftime("%d-%m-%Y  %H:%M")
+        # clinic_now(), not datetime.now(): on Vercel the server clock is UTC,
+        # which would print a time 5h30m before the consultation actually happened.
+        stamp = clinic_now().strftime("%d-%m-%Y  %H:%M")
         self.set_font("noto", "", 7)
         self.cell(95, 4, f"{self.L['generated']}: {stamp}", align="L")
         self.set_font("noto", "", 7)
