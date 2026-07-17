@@ -9,6 +9,9 @@ class PDFRequest(BaseModel):
     doctor: str
     patient: str = ""
     template_id: str = ""
+    # Human-readable template name (e.g. "Total Knee Replacement"). Printed
+    # alongside the short id in the PDF's meta band.
+    template_name: str = ""
     # "en" | "te" | "hi". Non-English notes are translated before rendering.
     language: str = "en"
     # The document exactly as it stands on screen, edits included.

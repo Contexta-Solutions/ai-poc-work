@@ -732,6 +732,7 @@ export default function VisitNotesApp() {
           doctor: metadata.doctor,
           patient: metadata.patient,
           template_id: documentData.template_id || '',
+          template_name: documentData.template_name || '',
           language: lang,
           // documentData.document is the live, edited document -- every edit,
           // added line, removed line and filled-in blank is already in here, so
@@ -769,7 +770,14 @@ export default function VisitNotesApp() {
       `Visit Date: ${metadata.visit_date}`,
       `Doctor: ${metadata.doctor || '—'}`,
     ];
-    if (documentData.template_id) lines.push(`Template: ${documentData.template_id}`);
+    if (documentData.template_id) {
+      const name = documentData.template_name;
+      lines.push(
+        name && name !== documentData.template_id
+          ? `Template: ${name} (${documentData.template_id})`
+          : `Template: ${documentData.template_id}`
+      );
+    }
     lines.push('');
 
     Object.keys(systemAttributeHeaders).forEach(sectionKey => {
@@ -1029,24 +1037,37 @@ export default function VisitNotesApp() {
             {/* ─── LEFT PANEL: Document View ─── */}
             <div className="w-full min-w-0 lg:w-2/3 bg-white/90 backdrop-blur-sm p-4 sm:p-6 md:p-8 shadow-lg shadow-slate-200/40 border border-white/80 rounded-2xl h-auto lg:h-[calc(100vh-7.5rem)] lg:overflow-y-auto">
 
-          {/* Panel Header */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-5 mb-6 gap-3">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2.5">
-                <span className="bg-gradient-to-br from-teal-500 to-teal-600 text-white p-2 rounded-xl shadow-sm">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                </span>
-                Clinical Document
-              </h1>
-              <p className="text-xs text-slate-400 mt-1.5 ml-[46px]">Auto-generated from voice dictation</p>
-            </div>
-            {documentData && (
-              <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                Template: {documentData.template_id}
+          {/* Panel Header — the template is identified by its own row below, so
+              there's no id badge up here. */}
+          <div className="border-b border-slate-100 pb-5 mb-6">
+            <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2.5">
+              <span className="bg-gradient-to-br from-teal-500 to-teal-600 text-white p-2 rounded-xl shadow-sm">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
               </span>
-            )}
+              Clinical Document
+            </h1>
+            <p className="text-xs text-slate-400 mt-1.5 ml-[46px]">Auto-generated from voice dictation</p>
           </div>
+
+          {/* Active template — full name on the left, short code on the right.
+              The code alone is cryptic; the name is what a human reads. */}
+          {documentData && (
+            <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50/40 px-4 py-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <svg className="w-4 h-4 text-teal-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                {/* Wraps rather than truncates -- showing the full name is the
+                    whole point, and long ones don't fit one line on a phone. */}
+                <span className="text-[15px] font-bold text-slate-800 leading-snug">
+                  {documentData.template_name || documentData.template_id}
+                </span>
+              </div>
+              <span className="text-[11px] font-mono font-semibold text-teal-700 bg-white border border-teal-200 px-2 py-1 rounded-md flex-shrink-0">
+                {documentData.template_id}
+              </span>
+            </div>
+          )}
 
           {/* Specialty Dropdown */}
           <div className="mb-5">

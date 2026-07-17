@@ -197,14 +197,21 @@ class EMRPdf(FPDF):
         self.cell(95, 4, f"{self.L['page']} {self.page_no()}/{{nb}}", align="R")
 
 
-def _meta_box(pdf: EMRPdf, patient: str, doctor: str, visit_date: str, template_id: str):
+def _meta_box(pdf: EMRPdf, patient: str, doctor: str, visit_date: str, template_id: str, template_name: str = ""):
     """Patient / doctor / date / template band under the header."""
     L = pdf.L
+    # Print the readable name with the short code beside it -- the code alone
+    # ("ORT-TKR") means nothing to whoever reads the printed note.
+    if template_name and template_name != template_id:
+        template_value = f"{template_name} ({template_id})" if template_id else template_name
+    else:
+        template_value = template_id or L["none"]
+
     pairs = [
         (L["patient"], patient or L["none"]),
         (L["doctor"], doctor or L["none"]),
         (L["date"], visit_date or L["none"]),
-        (L["template"], template_id or L["none"]),
+        (L["template"], template_value),
     ]
     pdf.set_fill_color(*BAND)
     pdf.set_draw_color(*RULE)
@@ -221,9 +228,15 @@ def _meta_box(pdf: EMRPdf, patient: str, doctor: str, visit_date: str, template_
         pdf.set_text_color(*MUTED)
         pdf.cell(col_w - 6, 4, label.upper(), new_x=XPos.LEFT, new_y=YPos.NEXT)
         pdf.set_x(x + 3)
-        pdf.set_font("noto", "B", 9.5)
         pdf.set_text_color(*INK)
-        pdf.cell(col_w - 6, 5.5, str(value))
+        if i == 3:
+            # Template names run long ("Lumbar Spondylosis / Low Back Pain"), so
+            # this cell wraps at a smaller size instead of overflowing the column.
+            pdf.set_font("noto", "B", 7.5)
+            pdf.multi_cell(col_w - 6, 3.2, str(value), new_x=XPos.LEFT, new_y=YPos.TOP)
+        else:
+            pdf.set_font("noto", "B", 9.5)
+            pdf.cell(col_w - 6, 5.5, str(value))
     pdf.set_y(top + 16)
     pdf.ln(5)
 
@@ -352,6 +365,7 @@ def create_emr_pdf(data: dict) -> bytes:
         doctor=str(data.get("doctor", "")).strip(),
         visit_date=str(data.get("visit_date", "")).strip(),
         template_id=str(data.get("template_id", "")).strip(),
+        template_name=str(data.get("template_name", "")).strip(),
     )
 
     for section in SECTION_ORDER:

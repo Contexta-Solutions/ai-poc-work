@@ -85,8 +85,14 @@ async def parse_note(req: NoteRequest):
         for ext in extracted_data.get("extensions", []):
             if ext.get("section") and ext.get("item_name"):
                 template.extend_section(ext["section"], {"item_name": ext["item_name"], "value": ext.get("value", "")})
-            
-        return template.export()
+
+        result = template.export()
+        # The human-readable name lives only in BASE_TEMPLATES, so hand it to the
+        # UI alongside the short id (which is all export() knows about). Covers
+        # the non-ortho templates too, which /api/templates doesn't serve.
+        template_id = result.get("template_id", "")
+        result["template_name"] = BASE_TEMPLATES.get(template_id, template_id)
+        return result
 
     except RuntimeError as re:
         raise HTTPException(status_code=503, detail=str(re))
