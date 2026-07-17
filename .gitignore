@@ -41,3 +41,7 @@ CLAUDE.md
 *.njsproj
 *.sln
 *.sw?
+
+# Diagrams (draw.io) and markdown docs / notes — keep local, not in the repo
+*.drawio
+*.md
