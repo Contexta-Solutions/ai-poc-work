@@ -232,7 +232,7 @@ export default function RightSidebar({ onClose, className = '' }) {
             <Scan size={14} className="text-indigo-400" /> Diagnostic Services
           </h3>
           <p className="text-[11px] text-[#667781] dark:text-[#8696a0] mb-3">
-            Lab & scan appointments aren't booked here — call the branch contact to schedule.
+            To schedule a lab test or scan, call your branch contact — they'll book it for you.
           </p>
           <div className="space-y-3">
             {DIAGNOSTICS.map((svc) => <DiagnosticCard key={svc.title} {...svc} />)}

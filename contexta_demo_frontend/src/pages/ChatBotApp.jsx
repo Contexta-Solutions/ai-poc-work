@@ -14,7 +14,7 @@ export default function ChatBotApp() {
   const [mobileView, setMobileView] = useState('chat'); // 'chat' | 'list'
   const initialMessage = {
     id: 1,
-    text: "Hi Jay! 👋 Welcome to OrthoCare Clinic.\n\nI can help you with:\n📅 Book a doctor appointment\n📍 Clinic locations & addresses\n🕐 Doctor availability & timings\n🩻 Lab/diagnostic timings (X-ray, Blood work, Ultrasound, MRI, CT)\n☎️ Contact person & phone for each branch\n\nJust let me know what you're looking for!",
+    text: "Hi Jay! 👋 Welcome to OrthoCare Clinic.\n\nI can help you with:\n📅 Book a doctor appointment\n📍 Clinic locations & addresses\n🕐 Doctor availability & timings\n🩻 Lab & scan info and booking numbers (X-ray, Blood work, Ultrasound, MRI, CT)\n☎️ Contact person & phone for each branch\n\nJust let me know what you're looking for!",
     sender: 'bot',
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   };
