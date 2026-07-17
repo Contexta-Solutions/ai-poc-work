@@ -2,7 +2,7 @@
 
 Design note -- why there is no retrieval layer and no answer key:
 
-The whole chart is ~5.5k tokens (measured, see doctor_data.py) -- well under 1% of
+The whole chart is ~5.5k tokens (measured, see patient_records.py) -- well under 1% of
 Sonnet's 1M window. It goes into the system prompt verbatim and is cached; a cache
 read bills at ~0.1x, so sending the ENTIRE chart costs a few hundred effective
 tokens -- cheaper than retrieving a slice of it uncached, since a retrieved slice
@@ -27,7 +27,7 @@ import os
 import anthropic
 from dotenv import load_dotenv
 
-from doctor_data import RECORDS_MD, REFERENCE_DATE
+from patient_records import RECORDS_MD, REFERENCE_DATE
 
 load_dotenv()
 
