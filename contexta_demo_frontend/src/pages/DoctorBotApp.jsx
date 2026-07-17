@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Mic, Square } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -290,11 +291,16 @@ const PatientChart = ({ patient }) => (
       </span>
     </div>
 
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4">
+    {/* These breakpoints track the PANE, not the viewport. Below lg the records
+        pane is full width, so it widens with the screen; from lg up the split
+        gives it only ~42%, which is narrower than the tablet pane -- hence the
+        step back down at lg. Without it, 4 vitals get ~95px each and the
+        creatinine card clips its own value. */}
+    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 2xl:grid-cols-4 gap-2.5 mt-4">
       {patient.vitals.map((v) => <VitalCard key={v.label} {...v} />)}
     </div>
 
-    <div className="grid md:grid-cols-2 gap-5 mt-5">
+    <div className="grid md:grid-cols-2 lg:grid-cols-1 gap-5 mt-5">
       <div>
         <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 mb-2">Current medication</p>
         <ul className="space-y-1.5">
@@ -323,16 +329,19 @@ const PatientChart = ({ patient }) => (
   </div>
 );
 
-// ─── Docked assistant ────────────────────────────────────────────────────────
+// ─── Assistant panel (persistent split-screen column) ───────────────────────
 
-const AssistantDock = ({ doctor }) => {
+const AssistantPanel = ({ doctor, className = '' }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   // Warm the prompt cache while the doctor is still reading the chart, so the
   // first question reads a hot cache instead of paying the cold write.
@@ -352,7 +361,6 @@ const AssistantDock = ({ doctor }) => {
     setMessages((m) => [...m, { role: 'user', content: q }]);
     setInput('');
     setError('');
-    setOpen(true);
     setLoading(true);
 
     try {
@@ -375,125 +383,174 @@ const AssistantDock = ({ doctor }) => {
     }
   };
 
+  // Voice input -- same flow as the WhatsApp ChatBot: record -> /api/transcribe
+  // -> ask the transcribed question. Whisper auto-detects the language; the
+  // doctor bot only needs the text, and the audio goes through the backend so
+  // the Groq key never reaches the browser.
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mediaRecorderRef.current.ondataavailable = (e) => audioChunksRef.current.push(e.data);
+      mediaRecorderRef.current.onstop = async () => {
+        setIsTranscribing(true);
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const fd = new FormData();
+        fd.append('file', blob, 'audio.webm');
+        try {
+          const res = await fetch(`${API_URL}/api/transcribe`, { method: 'POST', body: fd });
+          if (!res.ok) throw new Error(`Transcription failed (${res.status})`);
+          const data = await res.json();
+          const text = (data.text || '').trim();
+          if (text) ask(text);
+          else setError("I couldn't catch that — please try again.");
+        } catch {
+          setError('Voice input failed — please type your question instead.');
+        } finally {
+          setIsTranscribing(false);
+          stream.getTracks().forEach((t) => t.stop());
+        }
+      };
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+      setError('');
+    } catch {
+      setError('Please allow microphone access to use voice input.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
   const hasConversation = messages.length > 0 || loading || error;
+  const busy = loading || isTranscribing;
+  const placeholder = isRecording
+    ? 'Listening…'
+    : isTranscribing
+    ? 'Transcribing…'
+    : `Ask about your patients or schedule, ${doctor.split(' ')[1] || 'Doctor'}…`;
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-40 px-3 sm:px-5 pb-3 sm:pb-4 pointer-events-none">
-      <div className="max-w-5xl mx-auto pointer-events-auto">
-        <div className="bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl shadow-2xl shadow-slate-400/20 overflow-hidden">
-
+    <aside className={`${className} flex-col bg-white/55 backdrop-blur-sm min-h-0`}>
+      {/* Panel header */}
+      <div className="flex-shrink-0 flex items-center gap-2.5 px-4 py-3 border-b border-slate-200/70 bg-white/70">
+        <span className="bg-gradient-to-br from-teal-500 to-teal-600 text-white p-1.5 rounded-lg shadow-sm flex-shrink-0">
+          <ContextaIcon size={14} />
+        </span>
+        <span className="text-[13px] font-bold text-slate-700">Clinical Assistant</span>
+        <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded uppercase tracking-wide">Beta</span>
+        {hasConversation && (
           <button
-            onClick={() => setOpen((o) => !o)}
-            className="w-full flex items-center gap-2.5 px-4 py-2.5 border-b border-slate-100 hover:bg-slate-50/70 transition-colors text-left"
+            onClick={() => { setMessages([]); setError(''); }}
+            className="ml-auto text-[11px] font-semibold text-slate-400 hover:text-slate-600 transition-colors"
           >
-            <span className="bg-gradient-to-br from-teal-500 to-teal-600 text-white p-1.5 rounded-lg shadow-sm flex-shrink-0">
-              <ContextaIcon size={14} />
-            </span>
-            <span className="text-[13px] font-bold text-slate-700">Clinical Assistant</span>
-            <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded uppercase tracking-wide">Beta</span>
-            <span className="ml-auto flex items-center gap-2.5">
-              {hasConversation && (
-                <span
-                  role="button" tabIndex={0}
-                  onClick={(e) => { e.stopPropagation(); setMessages([]); setError(''); }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setMessages([]); setError(''); } }}
-                  className="text-[11px] font-semibold text-slate-400 hover:text-slate-600"
-                >
-                  Clear
-                </span>
-              )}
-              <svg className={`w-4 h-4 text-slate-400 transition-transform ${open ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </span>
+            Clear
           </button>
+        )}
+      </div>
 
-          {open && (
-            <div ref={scrollRef} className="max-h-[45vh] overflow-y-auto px-4 py-3.5">
-              {!hasConversation && (
-                <div className="py-1">
-                  <p className="text-[12px] text-slate-400 mb-2.5">
-                    Ask about your patients or your schedule. Try one of these:
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SUGGESTIONS.map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => ask(s)}
-                        className="text-[12px] text-slate-600 bg-slate-50 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-200 border border-slate-200 rounded-lg px-2.5 py-1.5 transition-colors text-left"
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 min-h-0">
+        {!hasConversation && (
+          <div>
+            <p className="text-[12px] text-slate-400 mb-2.5">
+              Ask about your patients or your schedule. Try one of these:
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => ask(s)}
+                  className="text-[12.5px] text-slate-600 bg-slate-50 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-200 border border-slate-200 rounded-lg px-3 py-2 transition-colors text-left"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-              {messages.map((m, i) =>
-                m.role === 'user' ? (
-                  <div key={i} className="flex justify-end mb-3">
-                    <p className="bg-gradient-to-r from-teal-600 to-teal-500 text-white text-[13px] font-medium px-3.5 py-2 rounded-2xl rounded-br-md max-w-[80%] shadow-sm shadow-teal-500/20">
-                      {m.content}
-                    </p>
-                  </div>
-                ) : (
-                  <div key={i} className="mb-4 last:mb-1">
-                    <Markdown text={m.content} />
-                    {m.usage && (
-                      <p className="text-[10px] text-slate-300 mt-1.5 tabular-nums">
-                        {m.usage.cache_read > 0
-                          ? `${m.usage.cache_read.toLocaleString()} tokens read from cache`
-                          : 'cache cold — first request'}
-                        {' · '}{m.usage.output} out
-                      </p>
-                    )}
-                  </div>
-                )
-              )}
-
-              {loading && (
-                <div className="flex items-center gap-2 text-slate-400 py-1.5">
-                  <span className="flex gap-1">
-                    <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                    <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                    <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-bounce" />
-                  </span>
-                  <span className="text-[12px]">Checking the record…</span>
-                </div>
-              )}
-
-              {error && (
-                <p className="text-[12.5px] text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
-                  {error}
+        {messages.map((m, i) =>
+          m.role === 'user' ? (
+            <div key={i} className="flex justify-end mb-3">
+              <p className="bg-gradient-to-r from-teal-600 to-teal-500 text-white text-[13px] font-medium px-3.5 py-2 rounded-2xl rounded-br-md max-w-[85%] shadow-sm shadow-teal-500/20">
+                {m.content}
+              </p>
+            </div>
+          ) : (
+            <div key={i} className="mb-4 last:mb-1">
+              <Markdown text={m.content} />
+              {m.usage && (
+                <p className="text-[10px] text-slate-300 mt-1.5 tabular-nums">
+                  {m.usage.cache_read > 0
+                    ? `${m.usage.cache_read.toLocaleString()} tokens read from cache`
+                    : 'cache cold — first request'}
+                  {' · '}{m.usage.output} out
                 </p>
               )}
             </div>
-          )}
+          )
+        )}
 
-          <div className="flex items-center gap-2 p-2.5 border-t border-slate-100 bg-white">
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') ask(); }}
-              onFocus={() => setOpen(true)}
-              placeholder={`Ask about your patients or schedule, ${doctor.split(' ')[1] || 'Doctor'}…`}
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-teal-400 focus:ring-2 focus:ring-teal-500/10 focus:bg-white transition-all"
-            />
-            <button
-              onClick={() => ask()}
-              disabled={!input.trim() || loading}
-              className="bg-gradient-to-r from-teal-600 to-teal-500 disabled:from-slate-200 disabled:to-slate-300 disabled:shadow-none text-white p-2.5 rounded-xl shadow-md shadow-teal-500/20 hover:from-teal-700 hover:to-teal-600 transition-all active:scale-[0.97] flex-shrink-0"
-              aria-label="Ask"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-            </button>
+        {loading && (
+          <div className="flex items-center gap-2 text-slate-400 py-1.5">
+            <span className="flex gap-1">
+              <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+              <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+              <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-bounce" />
+            </span>
+            <span className="text-[12px]">Checking the record…</span>
           </div>
-        </div>
+        )}
+
+        {error && (
+          <p className="text-[12.5px] text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 mt-1">
+            {error}
+          </p>
+        )}
       </div>
-    </div>
+
+      {/* Composer */}
+      <div className="flex-shrink-0 flex items-center gap-2 p-3 border-t border-slate-200/70 bg-white/80">
+        <button
+          onClick={isRecording ? stopRecording : startRecording}
+          disabled={isTranscribing || loading}
+          className={`flex-shrink-0 p-2.5 rounded-xl border transition-all active:scale-[0.97] disabled:opacity-40 ${
+            isRecording
+              ? 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse'
+              : 'bg-slate-50 border-slate-200 text-slate-500 hover:text-teal-700 hover:border-teal-200'
+          }`}
+          aria-label={isRecording ? 'Stop recording' : 'Record a question'}
+        >
+          {isRecording ? <Square size={16} fill="currentColor" /> : <Mic size={16} />}
+        </button>
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') ask(); }}
+          disabled={isRecording || isTranscribing}
+          placeholder={placeholder}
+          /* 16px on phones so iOS Safari doesn't zoom the page on focus. */
+          className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-[16px] sm:text-[13px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-teal-400 focus:ring-2 focus:ring-teal-500/10 focus:bg-white transition-all disabled:opacity-60"
+        />
+        <button
+          onClick={() => ask()}
+          disabled={!input.trim() || busy}
+          className="bg-gradient-to-r from-teal-600 to-teal-500 disabled:from-slate-200 disabled:to-slate-300 disabled:shadow-none text-white p-2.5 rounded-xl shadow-md shadow-teal-500/20 hover:from-teal-700 hover:to-teal-600 transition-all active:scale-[0.97] flex-shrink-0"
+          aria-label="Ask"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+          </svg>
+        </button>
+      </div>
+    </aside>
   );
 };
 
@@ -502,6 +559,8 @@ const AssistantDock = ({ doctor }) => {
 export default function DoctorBotApp() {
   const [activeId, setActiveId] = useState(PATIENTS[0].id);
   const [doctor, setDoctor] = useState('Dr. Suresh Kumar Nair');
+  // Phone/tablet show one pane at a time; from lg up both are on screen.
+  const [mobileView, setMobileView] = useState('records'); // 'records' | 'assistant'
   const patient = PATIENTS.find((p) => p.id === activeId);
 
   useEffect(() => {
@@ -512,9 +571,24 @@ export default function DoctorBotApp() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-teal-50/30">
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200/70">
-        <div className="max-w-5xl mx-auto px-4 sm:px-5 h-14 flex items-center justify-between gap-4">
+    // 100dvh, not 100vh: on mobile browsers 100vh includes the address bar, so
+    // the composer would sit below the fold.
+    <div className="h-[100dvh] flex flex-col overflow-hidden bg-gradient-to-br from-slate-50 via-gray-50 to-teal-50/30">
+      {/* Back to Home bar -- same control as the ChatBot page. */}
+      <div className="h-[44px] flex-shrink-0 bg-white border-b border-slate-200/70 flex items-center px-4 z-20">
+        <a
+          href="/"
+          className="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-teal-700 transition-colors no-underline"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to Home
+        </a>
+      </div>
+
+      <header className="flex-shrink-0 bg-white/80 backdrop-blur-md border-b border-slate-200/70 z-20">
+        <div className="px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <ContextaLogo />
             <span className="hidden sm:inline text-slate-200">|</span>
@@ -523,40 +597,65 @@ export default function DoctorBotApp() {
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="text-right min-w-0">
               <p className="text-[13px] font-semibold text-slate-700 truncate">{doctor}</p>
-              <p className="text-[10.5px] text-slate-400 -mt-0.5">Joint Replacement &amp; Sports Injury</p>
+              {/* Hidden on phones: it wraps to three lines and shoves the header around. */}
+              <p className="hidden sm:block text-[10.5px] text-slate-400 -mt-0.5 whitespace-nowrap">Joint Replacement &amp; Sports Injury</p>
             </div>
             <span className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-500 to-teal-600 text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0 shadow-sm">
               SK
             </span>
           </div>
         </div>
-      </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-5 py-5 pb-44">
-        <div className="flex gap-1.5 mb-4 overflow-x-auto">
-          {PATIENTS.map((p) => (
+        {/* Records / Assistant switch -- phone & tablet only. From lg up the
+            split shows both panes at once, so this is hidden. */}
+        <div className="lg:hidden flex gap-1 px-4 pb-2">
+          {[['records', 'Records'], ['assistant', 'Assistant']].map(([id, label]) => (
             <button
-              key={p.id}
-              onClick={() => setActiveId(p.id)}
-              className={`px-3.5 py-2 rounded-xl text-[13px] font-semibold whitespace-nowrap transition-all ${
-                p.id === activeId
-                  ? 'bg-white text-teal-700 shadow-sm border border-teal-200'
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-white/60 border border-transparent'
+              key={id}
+              onClick={() => setMobileView(id)}
+              className={`flex-1 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors ${
+                mobileView === id
+                  ? 'bg-teal-50 text-teal-700 border border-teal-200'
+                  : 'text-slate-500 border border-transparent hover:bg-slate-50'
               }`}
             >
-              {p.name}
+              {label}
             </button>
           ))}
         </div>
+      </header>
 
-        <PatientChart patient={patient} />
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Assistant column -- on the left: it's the thing the doctor drives, and
+            the chart is the reference they glance at. */}
+        <AssistantPanel
+          doctor={doctor}
+          className={`${mobileView === 'assistant' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[58%] lg:border-r border-slate-200/70`}
+        />
 
-        <p className="text-center text-[11px] text-slate-400 mt-5">
-          Sample records for demonstration · reference date 16-Jul-2026
-        </p>
-      </main>
+        {/* Records column */}
+        <section className={`${mobileView === 'records' ? 'flex' : 'hidden'} lg:flex flex-col w-full lg:w-[42%] overflow-y-auto`}>
+          <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-5">
+            <div className="flex gap-1.5 mb-4 overflow-x-auto">
+              {PATIENTS.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setActiveId(p.id)}
+                  className={`px-3.5 py-2 rounded-xl text-[13px] font-semibold whitespace-nowrap transition-all ${
+                    p.id === activeId
+                      ? 'bg-white text-teal-700 shadow-sm border border-teal-200'
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-white/60 border border-transparent'
+                  }`}
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
 
-      <AssistantDock doctor={doctor} />
+            <PatientChart patient={patient} />
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

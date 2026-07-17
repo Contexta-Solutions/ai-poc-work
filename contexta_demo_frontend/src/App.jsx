@@ -13,9 +13,7 @@ function RedirectOnReload() {
   useEffect(() => {
     // This only runs once on initial mount (page load / Ctrl+R).
     // SPA navigations don't remount this component.
-    // /doctor is exempt: it has no link on the landing page and is reached by
-    // typing the URL, so redirecting it home would make it unreachable.
-    if (location.pathname !== '/' && location.pathname !== '/doctor') {
+    if (location.pathname !== '/') {
       navigate('/', { replace: true });
     }
   }, []);
@@ -31,8 +29,7 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/visit-notes" element={<VisitNotesApp />} />
         <Route path="/chatbot" element={<ChatBotApp />} />
-        {/* Internal doctor assistant POC. Deliberately not linked from the
-            landing page -- reach it by typing /doctor. */}
+        {/* Doctor-facing assistant over the patient chart. */}
         <Route path="/doctor" element={<DoctorBotApp />} />
       </Routes>
     </BrowserRouter>
