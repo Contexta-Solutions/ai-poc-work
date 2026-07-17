@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-ro
 import LandingPage from './pages/LandingPage';
 import VisitNotesApp from './pages/VisitNotesApp';
 import ChatBotApp from './pages/ChatBotApp';
+import DoctorBotApp from './pages/DoctorBotApp';
 
 // Redirect to landing page on hard reload (Ctrl+R)
 function RedirectOnReload() {
@@ -12,7 +13,9 @@ function RedirectOnReload() {
   useEffect(() => {
     // This only runs once on initial mount (page load / Ctrl+R).
     // SPA navigations don't remount this component.
-    if (location.pathname !== '/') {
+    // /doctor is exempt: it has no link on the landing page and is reached by
+    // typing the URL, so redirecting it home would make it unreachable.
+    if (location.pathname !== '/' && location.pathname !== '/doctor') {
       navigate('/', { replace: true });
     }
   }, []);
@@ -28,6 +31,9 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/visit-notes" element={<VisitNotesApp />} />
         <Route path="/chatbot" element={<ChatBotApp />} />
+        {/* Internal doctor assistant POC. Deliberately not linked from the
+            landing page -- reach it by typing /doctor. */}
+        <Route path="/doctor" element={<DoctorBotApp />} />
       </Routes>
     </BrowserRouter>
   );
