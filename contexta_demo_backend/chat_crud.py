@@ -10,7 +10,7 @@ appointment.
 from datetime import datetime, timedelta
 
 import appointments_store
-from ortho_clinic_data import DOCTORS, LOCATIONS, DAY_NAMES, DAY_TELUGU
+from ortho_clinic_data import DOCTORS, LOCATIONS, DAY_NAMES, DAY_TELUGU, clinic_now
 
 # Length of one consultation slot, in minutes. Windows are sliced into slots of
 # this size (skipping the lunch break) and each slot holds one patient.
@@ -152,9 +152,9 @@ def get_booking_context(doctor_name: str, location_name: str, date_str: str) -> 
     weekday = date_obj.weekday()
     day_name = DAY_NAMES[weekday]
 
-    if date_obj.date() < datetime.now().date():
+    if date_obj.date() < clinic_now().date():
         return (f"BOOKING CHECK — {date_str} ({day_name}) is in the PAST. Ask the patient for a "
-                f"future date (today is {datetime.now().strftime('%Y-%m-%d')}).")
+                f"future date (today is {clinic_now().strftime('%Y-%m-%d')}).")
 
     if weekday == 6:  # Sunday
         return (f"BOOKING CHECK — {doctor['name']} on {date_str} ({day_name}): the clinic is "
@@ -249,7 +249,7 @@ def book_appointment(doctor_name: str, location_name: str, date_str: str,
     date_str = date_obj.strftime("%Y-%m-%d")
     weekday = date_obj.weekday()
 
-    if date_obj.date() < datetime.now().date():
+    if date_obj.date() < clinic_now().date():
         return {"status": "past_date", "requested": date_str}
 
     if weekday == 6:
@@ -378,7 +378,7 @@ def get_next_available(doctor_name: str, location_name: str | None = None) -> st
     if not doctor:
         return ""
     location = normalize_location(location_name) if location_name else None
-    today = datetime.now().date()
+    today = clinic_now().date()
 
     for i in range(0, 21):
         d = today + timedelta(days=i)

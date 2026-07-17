@@ -7,3 +7,6 @@ anthropic
 python-dotenv
 httpx
 python-multipart
+# ortho_clinic_data.ZoneInfo("Asia/Kolkata") needs the IANA tz database, which a
+# slim serverless image may not ship -- without this the backend fails at import.
+tzdata
