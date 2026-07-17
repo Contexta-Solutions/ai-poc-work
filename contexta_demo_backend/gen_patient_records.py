@@ -1,10 +1,10 @@
-"""Regenerates doctor_data.py from the source markdown at the repo root.
+"""Regenerates patient_records.py from the source markdown at the repo root.
 
 The markdown is gitignored (`*.md`), so it never reaches a deployment -- its
 contents have to live inside a committed .py file for the bot to read them.
 Run this after editing the markdown:
 
-    python gen_doctor_data.py
+    python gen_patient_records.py
 
 Only the RECORDS file is embedded. The companion Q&A file
 (internal_doctor_chatbot_qa_training.md) is deliberately NOT used: every answer
@@ -17,11 +17,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CONTEXT_SRC = ROOT / "internal_doctor_chatbot_context.md"
-OUT = Path(__file__).resolve().parent / "doctor_data.py"
+OUT = Path(__file__).resolve().parent / "patient_records.py"
 
 HEADER = '''"""Static patient records for the internal Doctor Assistant (/doctor) ONLY.
 
-GENERATED FILE -- do not edit by hand. Run `python gen_doctor_data.py` instead;
+GENERATED FILE -- do not edit by hand. Run `python gen_patient_records.py` instead;
 the source of truth is the markdown at the repo root.
 
 Kept separate from ortho_clinic_data.py (ChatBot) and doctors_data.py (Visit

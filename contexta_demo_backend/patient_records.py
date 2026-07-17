@@ -1,6 +1,6 @@
 """Static patient records for the internal Doctor Assistant (/doctor) ONLY.
 
-GENERATED FILE -- do not edit by hand. Run `python gen_doctor_data.py` instead;
+GENERATED FILE -- do not edit by hand. Run `python gen_patient_records.py` instead;
 the source of truth is the markdown at the repo root.
 
 Kept separate from ortho_clinic_data.py (ChatBot) and doctors_data.py (Visit
