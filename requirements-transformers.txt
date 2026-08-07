@@ -1,0 +1,13 @@
+# Optional: clinical de-identification model via --nlp-engine transformers
+#
+#   pip install -r requirements-transformers.txt
+#   python -m spacy download en_core_web_sm     # tokenizer only; NER is the transformer
+#
+# spacy-huggingface-pipelines is the package Presidio's availability check
+# actually looks for, and it caps transformers below 5.x. Pin both explicitly:
+# `pip install "transformers>=4.40"` on its own resolves to 5.x, which fails
+# with "NLP engine 'transformers' is not available".
+
+spacy-huggingface-pipelines==0.0.4
+transformers==4.57.6
+torch==2.13.0

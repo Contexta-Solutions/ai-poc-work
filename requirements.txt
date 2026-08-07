@@ -1,0 +1,23 @@
+# Pin versions: a new Presidio release can add entity types, which changes
+# detection behaviour. Treat that as a behaviour change, not a patch bump.
+presidio-analyzer==2.2.364
+presidio-anonymizer==2.2.364
+spacy==3.8.14
+pymupdf==1.28.0
+
+# The NER model is NOT a pip dependency — install it separately:
+#   python -m spacy download en_core_web_lg
+
+# --- optional: --nlp-engine transformers (clinical de-identification model) ---
+#
+#   pip install -r requirements-transformers.txt
+#   python -m spacy download en_core_web_sm
+#
+# `spacy-huggingface-pipelines` is the package Presidio actually gates on --
+# TransformersNlpEngine.is_available is bool(spacy_huggingface_pipelines).
+# Installing `transformers` alone leaves the engine unavailable with a
+# misleading "not available / packages installed" error.
+#
+# It also caps transformers below 5.x. Installing an unpinned
+# `transformers>=4.40` first pulls 5.x, which then gets downgraded — pin here
+# instead so the resolver gets it right the first time.

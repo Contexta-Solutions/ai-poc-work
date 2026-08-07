@@ -1,0 +1,44 @@
+# ---------------------------------------------------------------- python ---
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+
+# ---------------------------------------------------------------- scratch ---
+_*.log
+_*.txt
+*.tmp
+
+# ------------------------------------------------------ derived artifacts ---
+# Regenerable from the source PDFs, and every one of them contains patient
+# identifiers extracted verbatim from clinical documents. Reproduce with:
+#   python redact.py <file>          -> *.redacted.pdf
+#   python evaluate.py --report ...  -> eval-report.md
+*.redacted.pdf
+out.json
+eval-report.md
+evaluation/report*.md
+
+# The durable record of measured results lives in evaluation/README.md, which is
+# reviewed and committed deliberately rather than overwritten by every run.
+
+# ------------------------------------------------------------ superseded ---
+# Azure Health De-identification spike. Evaluated and set aside when Azure
+# stopped being the deployment target — see docs/architecture.md. Kept locally
+# as the reference implementation if that decision is ever revisited.
+deid_spike.py
+
+# Personal scratch notes
+start.txt
+
+# Early synthetic fixture, superseded by sample_pdf/
+sample_lab_report.pdf
+
+# ------------------------------------------------------------------ notes ---
+# evaluation/corpus/ IS committed, by explicit decision — it holds real clinical
+# documents and is the corpus every number in evaluation/README.md is measured on.
+# This repository must stay private. Git history is permanent; anything committed
+# here cannot be meaningfully un-committed.

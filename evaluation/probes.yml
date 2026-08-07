@@ -1,0 +1,170 @@
+# Ground truth probe lists.
+#
+# NOT a full span annotation. Each entry is a literal string that must (or must
+# not) survive into the redacted output, checked case-insensitively.
+#
+#   must_redact  every one of these is PHI. Surviving = a LEAK. Drives recall.
+#   must_keep    every one of these is clinical content. Missing = OVER-REDACTION.
+#
+# EVERY ENTRY MUST ACTUALLY OCCUR IN ITS DOCUMENT. `evaluate.py` validates this
+# and refuses to score otherwise, because a phantom probe corrupts the metrics in
+# both directions: a must_keep that isn't there reads as permanent over-redaction,
+# and a must_redact that isn't there can never leak, inflating recall for free.
+# Both happened on the first draft of this file.
+#
+# ALL SEVEN PDFs ARE THE SAME PATIENT (NAGA LAXMI J, UMR2162620), so shared PHI
+# lives in `common`. The lab reports additionally share a footer block.
+#
+# TRIAGE JUDGEMENT CALLS, stated so they can be argued with:
+#   * facility names and addresses -> must_redact. Azure's own PhiCategory list
+#     includes Hospital, and we already treat "Banjara Hills" as PHI, so
+#     "Tenet Diagnostics" and "Rainbow Children" are treated the same for
+#     consistency. If you decide the lab's own name is not PHI, move them.
+#   * GST no., service codes, public URL -> must_keep. These identify the
+#     BUSINESS, not the patient, and appear on every report the lab issues.
+#   * form labels (Can.amt, Bill Cum Receipt) -> must_keep. Not identifiers;
+#     redacting them destroys structure a summariser reads.
+#   * staff usernames (sadf, arunkumara) -> must_redact under HIPAA #18.
+
+common:
+  must_redact:
+    # --- patient ---
+    - NAGA LAXMI J
+    - NAGA
+    - LAXMI
+    # --- identifiers ---
+    - UMR2162620
+    - 25BNJH0012386
+    # --- referring doctor ---
+    - RAJASHEKAR
+    - CHAKRAVATHY
+    # --- dates ---
+    - 07-Nov-2025
+    # --- facility ---
+    - Tenet Diagnostics
+  must_keep: []
+
+# Lab-report footer. `_a` has no SID; the other five reports do.
+lab_footer: &lab_footer
+  - Abdur
+  - Rehman
+  - Asif
+  - "78102"
+  - APMC                    # medical council, part of the registration no.
+  - Banjara Hills
+  - Journalist Colony
+  - Kineta Towers
+
+lab_footer_sid: &lab_footer_sid
+  - Abdur
+  - Rehman
+  - Asif
+  - "78102"
+  - APMC
+  - Banjara Hills
+  - Journalist Colony
+  - Kineta Towers
+  - "30644477"              # SID, a second accession identifier
+
+documents:
+
+  # ---------------------------------------------------------------- bill ---
+  25BNJH0012386.pdf:
+    must_redact:
+      - "6281651144"          # patient mobile
+      - 8-2-269/4/B           # street address
+      - Banjara Hills
+      - Hyderabad
+      - "47169189"            # facility landline
+      - sadf                  # staff username
+      - arunkumara            # staff username
+      - Banjarahills Hub      # facility branch
+      - Rainbow Children      # neighbouring hospital, named in the address block
+    must_keep:
+      - "3,499.00"
+      - 36AAGCC8833Q1ZX       # lab's GST no. — identifies the business
+      - TNT61899              # service catalogue code
+      - Tenet Advance Health Check Up
+      - Bill Cum Receipt
+      - Can.amt
+      - www.tenetdiagnostics.in
+      - Paid Amount
+      - Glucose Fasting
+      - Lipid Profile
+      - Liver Function Test
+      - Creatinine
+      - Blood Urea Nitrogen
+      - Uric Acid
+      - Thyroid Profile
+      - Complete Blood Count
+      - Erythrocyte Sedimentation Rate
+      - Calcium
+      - Phosphorus
+      - Magnesium
+      - Vitamin B12
+      - Dental Screening
+
+  # ------------------------------------------------------- lab: glucose ---
+  25BNJH0012386_a.pdf:
+    must_redact: *lab_footer
+    must_keep:
+      - Glucose Fasting
+      - Hexokinase
+      - mg/dL
+      - "109"
+      - Diabetes mellitus
+      - Kindly correlate clinically
+      - Diabetes-2022                 # literature citation
+      - American Diabetes Association
+
+  # ----------------------------------------------------------- lab: LFT ---
+  25BNJH0012386_c.pdf: &lft
+    must_redact: *lab_footer_sid
+    must_keep:
+      - Total Bilirubin
+      - Direct Bilirubin
+      - Indirect Bilirubin
+      - Alanine Aminotransferase
+      - Aspartate Aminotransferase
+      - Alkaline Phosphatase
+      - Gamma GT
+      - Total Protein
+      - Albumin
+      - Globulin
+      - A/GRatio                      # the fragmentation regression
+      - Diazo Method
+      - Bromocresol Green
+      - Biuret
+      - GCNA
+      - wtihout                       # source-document typo, must not be redacted
+      - mg/dL
+      - U/L
+      - g/dL
+      - 35-104
+      - 6.6-8.7
+      - Kindly correlate clinically
+
+  25BNJH0012386_d.pdf: *lft
+
+  # ------------------------------------------------------- lab: calcium ---
+  25BNJH0012386_e.pdf:
+    must_redact: *lab_footer_sid
+    must_keep:
+      - Calcium
+      - BAPTA
+      - "9.1"
+      - 8.8-10.2
+      - mg/dL
+      - hypocalcemia
+      - hypercalcemia
+      - Parathormone
+      - Kidney stones
+
+  # ----------------------------------------------------- lab: magnesium ---
+  25BNJH0012386_f.pdf: &mag
+    must_redact: *lab_footer_sid
+    must_keep:
+      - Magnesium
+      - mg/dL
+
+  25BNJH0012386_g.pdf: *mag

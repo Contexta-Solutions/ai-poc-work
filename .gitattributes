@@ -1,0 +1,10 @@
+# Normalise line endings so diffs stay clean across Windows and CI.
+* text=auto eol=lf
+
+# Binary — never diff or normalise these.
+*.pdf binary
+*.drawio -text
+
+# Ground truth and docs are reviewed by humans; keep them diffable.
+*.yml text eol=lf
+*.md  text eol=lf
