@@ -116,7 +116,7 @@ export default function LandingPage() {
           {/* Contexta Health Product Card */}
           <a
             id="card-product"
-            href="https://contexta-product-design.vercel.app/"
+            href="https://contexta-product-design.vercel.app/queue"
             target="_blank"
             rel="noopener noreferrer"
             className="group relative bg-white/60 backdrop-blur-xl rounded-[2rem] p-8 flex flex-col border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_-15px_rgba(168,85,247,0.4)] transition-all duration-500 hover:-translate-y-3 text-left cursor-pointer overflow-hidden no-underline"
