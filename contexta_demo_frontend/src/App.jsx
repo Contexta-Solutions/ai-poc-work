@@ -13,7 +13,10 @@ function RedirectOnReload() {
   useEffect(() => {
     // This only runs once on initial mount (page load / Ctrl+R).
     // SPA navigations don't remount this component.
-    if (location.pathname !== '/') {
+    // Only a real reload redirects: the landing cards open each app in a new
+    // tab, which is a fresh 'navigate' load and must land on its route.
+    const isReload = performance.getEntriesByType('navigation')[0]?.type === 'reload';
+    if (isReload && location.pathname !== '/') {
       navigate('/', { replace: true });
     }
   }, []);

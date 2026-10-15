@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 
 // Contexta Health SVG Logo (extracted from contextaemr.com)
 const ContextaLogo = ({ className = '' }) => (
@@ -17,12 +16,156 @@ const ContextaIcon = () => (
   </svg>
 );
 
-export default function LandingPage() {
-  const navigate = useNavigate();
+const PRODUCT_URL = 'https://contexta-product-design.vercel.app/queue';
 
+// The four demo tiles. Every tile opens in a new tab (App.jsx only redirects
+// on a real reload, so a fresh tab lands on its route). Classes are spelled out
+// per card rather than built from a colour name: Tailwind only ships classes it
+// finds verbatim in the source.
+const DEMOS = [
+  {
+    id: 'card-visit-notes',
+    href: '/visit-notes',
+    title: 'Visit Notes',
+    blurb: 'AI-powered voice dictation that automatically extracts clinical data and fills EMR templates.',
+    features: ['Voice-to-EMR dictation', 'Multi-specialty templates', 'Intelligent slot filling'],
+    cta: 'Open Visit Notes',
+    icon: 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z',
+    c: {
+      shadow: 'hover:shadow-[0_20px_40px_-15px_rgba(20,184,166,0.4)]',
+      glow: 'from-teal-500/5 to-emerald-500/10',
+      blob: 'bg-teal-400/20 group-hover:bg-teal-400/40',
+      icon: 'from-teal-400 to-emerald-600 shadow-teal-500/30 group-hover:-rotate-3',
+      title: 'group-hover:from-teal-600 group-hover:to-emerald-600',
+      check: 'bg-teal-100 text-teal-600 group-hover:bg-teal-500',
+      cta: 'text-teal-600 group-hover:text-teal-700',
+    },
+  },
+  {
+    id: 'card-chatbot',
+    href: '/chatbot',
+    title: 'WhatsApp ChatBot',
+    blurb: 'Intelligent clinical assistant for patients — book appointments, check doctor availability, and get health guidance.',
+    features: ['AI-powered patient assistant', 'Appointment booking', 'Doctor availability'],
+    cta: 'Open WhatsApp ChatBot',
+    icon: 'M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z',
+    c: {
+      shadow: 'hover:shadow-[0_20px_40px_-15px_rgba(59,130,246,0.4)]',
+      glow: 'from-blue-500/5 to-indigo-500/10',
+      blob: 'bg-blue-400/20 group-hover:bg-blue-400/40',
+      icon: 'from-blue-400 to-indigo-600 shadow-blue-500/30 group-hover:rotate-3',
+      title: 'group-hover:from-blue-600 group-hover:to-indigo-600',
+      check: 'bg-blue-100 text-blue-600 group-hover:bg-blue-500',
+      cta: 'text-blue-600 group-hover:text-blue-700',
+    },
+  },
+  {
+    id: 'card-doctors-chat',
+    href: '/doctor',
+    title: 'Doctors Chat',
+    blurb: 'Ask your own patient records in plain language — trends, history and your surgery schedule, answered from the chart.',
+    features: ['Chat over patient records', 'Trends & visit history', 'Ask by voice'],
+    cta: 'Open Doctors Chat',
+    icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+    c: {
+      shadow: 'hover:shadow-[0_20px_40px_-15px_rgba(99,102,241,0.4)]',
+      glow: 'from-indigo-500/5 to-violet-500/10',
+      blob: 'bg-indigo-400/20 group-hover:bg-indigo-400/40',
+      icon: 'from-indigo-400 to-violet-600 shadow-indigo-500/30 group-hover:-rotate-3',
+      title: 'group-hover:from-indigo-600 group-hover:to-violet-600',
+      check: 'bg-indigo-100 text-indigo-600 group-hover:bg-indigo-500',
+      cta: 'text-indigo-600 group-hover:text-indigo-700',
+    },
+  },
+  {
+    id: 'card-lab-reports',
+    href: 'https://lab-ai-jzs6.vercel.app/',
+    title: 'Lab Reports',
+    blurb: 'Upload a lab report PDF or photo — every test is read, matched to the patient by UHID, and filed into their history for review.',
+    features: ['Reads PDFs & photos', 'Auto-matched by UHID', 'Review queue'],
+    cta: 'Open Lab Reports',
+    icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z',
+    c: {
+      shadow: 'hover:shadow-[0_20px_40px_-15px_rgba(245,158,11,0.4)]',
+      glow: 'from-amber-500/5 to-orange-500/10',
+      blob: 'bg-amber-400/20 group-hover:bg-amber-400/40',
+      icon: 'from-amber-400 to-orange-600 shadow-amber-500/30 group-hover:rotate-3',
+      title: 'group-hover:from-amber-600 group-hover:to-orange-600',
+      check: 'bg-amber-100 text-amber-600 group-hover:bg-amber-500',
+      // amber-600 is too light for text on white; 700 keeps the CTA readable.
+      cta: 'text-amber-700 group-hover:text-amber-800',
+    },
+  },
+];
+
+const NewTabArrow = () => (
+  <>
+    <svg className="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+    </svg>
+    <span className="sr-only">(opens in a new tab)</span>
+  </>
+);
+
+const Feature = ({ label, check }) => (
+  <div className="flex items-center gap-3 text-[14px] text-slate-600 font-semibold group-hover:text-slate-900 transition-colors">
+    <div className={`w-6 h-6 rounded-full flex items-center justify-center group-hover:text-white transition-colors duration-300 ${check}`}>
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+      </svg>
+    </div>
+    {label}
+  </div>
+);
+
+function DemoCard({ id, href, title, blurb, features, cta, icon, c }) {
+  return (
+    <a
+      id={id}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`group relative bg-white/60 backdrop-blur-xl rounded-[2rem] p-8 flex flex-col border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ${c.shadow} transition-all duration-500 hover:-translate-y-3 text-left cursor-pointer overflow-hidden no-underline`}
+    >
+      {/* Glowing background effects */}
+      <div className={`absolute inset-0 bg-gradient-to-br via-transparent ${c.glow} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
+      <div className={`absolute -top-24 -right-24 w-48 h-48 rounded-full blur-3xl transition-all duration-500 group-hover:scale-150 ${c.blob}`}></div>
+
+      <div className="relative z-10 flex flex-col flex-1">
+        <div className={`bg-gradient-to-br text-white p-4 rounded-2xl shadow-lg inline-flex self-start mb-8 group-hover:scale-110 transition-transform duration-500 ${c.icon}`}>
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={icon} />
+          </svg>
+        </div>
+
+        <h2 className={`text-[26px] font-extrabold text-slate-800 mb-4 group-hover:bg-gradient-to-r group-hover:bg-clip-text group-hover:text-transparent transition-all ${c.title}`}>
+          {title}
+        </h2>
+
+        <p /* min-h, not a fixed h: the cards narrow at 4-up and a fixed height
+           clipped the longer blurbs. The CTA row bottom-aligns via mt-auto, so
+           this only needs to be a floor, not an exact match. */
+        className="text-slate-500 text-[15px] leading-relaxed mb-8 min-h-[65px] font-medium">
+          {blurb}
+        </p>
+
+        <div className="space-y-4 mb-10">
+          {features.map((f) => <Feature key={f} label={f} check={c.check} />)}
+        </div>
+
+        <div className={`mt-auto flex items-center gap-2 font-bold text-[15px] transition-colors ${c.cta}`}>
+          {cta}
+          <NewTabArrow />
+        </div>
+      </div>
+    </a>
+  );
+}
+
+export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-teal-50/30 flex flex-col">
-      
+
       {/* ─── FLOATING PARTICLES BACKGROUND ─── */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-20 left-10 w-72 h-72 bg-teal-200/20 rounded-full blur-3xl float-animation"></div>
@@ -41,7 +184,7 @@ export default function LandingPage() {
 
       {/* ─── HERO + CARDS ─── */}
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-12 relative z-10">
-        
+
         {/* Hero Section */}
         <div className="text-center mb-16 max-w-2xl">
           <div className="flex justify-center mb-6">
@@ -53,217 +196,57 @@ export default function LandingPage() {
             AI-Powered <span className="bg-gradient-to-r from-teal-600 to-emerald-500 bg-clip-text text-transparent">Clinical Intelligence</span>
           </h1>
           <p className="text-lg text-slate-500 max-w-lg mx-auto leading-relaxed">
-            Streamline your healthcare workflow with intelligent documentation and an AI-powered patient assistant.
+            Intelligent documentation, AI assistants for patients and doctors, and lab reports read for you.
           </p>
         </div>
 
-        {/* ─── FOUR BIG CARDS ─── */}
-        {/* 2-up on tablet, 4-up from lg. Container widened from 1200 to 1400 so
-            the fourth card doesn't squeeze the copy in every card. */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 max-w-[1400px] w-full">
-          
-          {/* Visit Notes Card */}
-          <button
-            id="card-visit-notes"
-            onClick={() => navigate('/visit-notes')}
-            className="group relative bg-white/60 backdrop-blur-xl rounded-[2rem] p-8 flex flex-col border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_-15px_rgba(20,184,166,0.4)] transition-all duration-500 hover:-translate-y-3 text-left cursor-pointer overflow-hidden"
-          >
-            {/* Glowing background effects */}
-            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 via-transparent to-emerald-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div className="absolute -top-24 -right-24 w-48 h-48 bg-teal-400/20 rounded-full blur-3xl group-hover:bg-teal-400/40 transition-all duration-500 group-hover:scale-150"></div>
-            
-            <div className="relative z-10 flex flex-col flex-1">
-              {/* Icon */}
-              <div className="bg-gradient-to-br from-teal-400 to-emerald-600 text-white p-4 rounded-2xl shadow-lg shadow-teal-500/30 inline-flex self-start mb-8 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-500">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
-              </div>
+        <div className="max-w-[1400px] w-full flex flex-col gap-6">
 
-              <h2 className="text-[26px] font-extrabold text-slate-800 mb-4 group-hover:bg-gradient-to-r group-hover:from-teal-600 group-hover:to-emerald-600 group-hover:bg-clip-text group-hover:text-transparent transition-all">
-                Visit Notes
-              </h2>
-              
-              <p /* min-h, not a fixed h: the cards narrow at 4-up and a fixed height
-                 clipped the longer blurbs. The CTA row bottom-aligns via mt-auto, so
-                 this only needs to be a floor, not an exact match. */
-              className="text-slate-500 text-[15px] leading-relaxed mb-8 min-h-[65px] font-medium">
-                AI-powered voice dictation that automatically extracts clinical data and fills EMR templates.
-              </p>
+          {/* ─── FOUR DEMO CARDS ─── */}
+          {/* 2-up on tablet, 4-up only from xl: at lg the cards were 226px wide
+              and every title, blurb and bullet wrapped. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            {DEMOS.map((demo) => <DemoCard key={demo.id} {...demo} />)}
+          </div>
 
-              <div className="space-y-4 mb-10">
-                {['Voice-to-EMR dictation', 'Multi-specialty templates', 'Intelligent slot filling'].map((feature, i) => (
-                  <div key={i} className="flex items-center gap-3 text-[14px] text-slate-600 font-semibold group-hover:text-slate-900 transition-colors">
-                    <div className="w-6 h-6 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 group-hover:bg-teal-500 group-hover:text-white transition-colors duration-300">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    {feature}
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-auto flex items-center gap-2 text-teal-600 font-bold text-[15px] group-hover:text-teal-700 transition-colors">
-                Open Visit Notes
-                <svg className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
-              </div>
-            </div>
-          </button>
-
-          {/* Contexta Health Product Card */}
+          {/* ─── PRODUCT BANNER ─── */}
+          {/* The production platform, set apart from the demos as one wide row.
+              Stacks on phones; icon | copy | CTA from md up. */}
           <a
             id="card-product"
-            href="https://contexta-product-design.vercel.app/queue"
+            href={PRODUCT_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="group relative bg-white/60 backdrop-blur-xl rounded-[2rem] p-8 flex flex-col border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_-15px_rgba(168,85,247,0.4)] transition-all duration-500 hover:-translate-y-3 text-left cursor-pointer overflow-hidden no-underline"
+            className="group relative bg-white/60 backdrop-blur-xl rounded-[2rem] p-8 flex flex-col md:flex-row md:items-center gap-6 md:gap-8 border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_-15px_rgba(168,85,247,0.4)] transition-all duration-500 hover:-translate-y-1 text-left cursor-pointer overflow-hidden no-underline"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-fuchsia-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
             <div className="absolute -top-24 -right-24 w-48 h-48 bg-purple-400/20 rounded-full blur-3xl group-hover:bg-purple-400/40 transition-all duration-500 group-hover:scale-150"></div>
 
-            <div className="relative z-10 flex flex-col flex-1">
-              {/* Icon */}
-              <div className="bg-gradient-to-br from-purple-500 to-fuchsia-600 text-white p-4 rounded-2xl shadow-lg shadow-purple-500/30 inline-flex self-start mb-8 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-              </div>
+            <div className="relative z-10 shrink-0 bg-gradient-to-br from-purple-500 to-fuchsia-600 text-white p-4 rounded-2xl shadow-lg shadow-purple-500/30 inline-flex self-start md:self-center group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+            </div>
 
-              <h2 className="text-[26px] font-extrabold text-slate-800 mb-4 group-hover:bg-gradient-to-r group-hover:from-purple-600 group-hover:to-fuchsia-600 group-hover:bg-clip-text group-hover:text-transparent transition-all">
+            <div className="relative z-10 flex-1 min-w-0">
+              <h2 className="text-[26px] font-extrabold text-slate-800 mb-2 group-hover:bg-gradient-to-r group-hover:from-purple-600 group-hover:to-fuchsia-600 group-hover:bg-clip-text group-hover:text-transparent transition-all">
                 Contexta Health
               </h2>
-              
-              <p /* min-h, not a fixed h: the cards narrow at 4-up and a fixed height
-                 clipped the longer blurbs. The CTA row bottom-aligns via mt-auto, so
-                 this only needs to be a floor, not an exact match. */
-              className="text-slate-500 text-[15px] leading-relaxed mb-8 min-h-[65px] font-medium">
+              <p className="text-slate-500 text-[15px] leading-relaxed font-medium mb-4">
                 Our full-featured healthcare platform — the production product powering clinical workflows at scale.
               </p>
-
-              <div className="space-y-4 mb-10">
-                {['Live production EMR', 'Full clinical suite', 'Enterprise-grade platform'].map((feature, i) => (
-                  <div key={i} className="flex items-center gap-3 text-[14px] text-slate-600 font-semibold group-hover:text-slate-900 transition-colors">
-                    <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 group-hover:bg-purple-500 group-hover:text-white transition-colors duration-300">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    {feature}
-                  </div>
+              <div className="flex flex-wrap gap-x-8 gap-y-3">
+                {['Live production EMR', 'Full clinical suite', 'Enterprise-grade platform'].map((f) => (
+                  <Feature key={f} label={f} check="bg-purple-100 text-purple-600 group-hover:bg-purple-500" />
                 ))}
               </div>
+            </div>
 
-              <div className="mt-auto flex items-center gap-2 text-purple-600 font-bold text-[15px] group-hover:text-purple-700 transition-colors">
-                Visit Product
-                <svg className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </div>
+            <div className="relative z-10 shrink-0 flex items-center gap-2 text-purple-600 font-bold text-[15px] group-hover:text-purple-700 transition-colors">
+              Visit Product
+              <NewTabArrow />
             </div>
           </a>
-
-          {/* ChatBot Card */}
-          <button
-            id="card-chatbot"
-            onClick={() => navigate('/chatbot')}
-            className="group relative bg-white/60 backdrop-blur-xl rounded-[2rem] p-8 flex flex-col border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_-15px_rgba(59,130,246,0.4)] transition-all duration-500 hover:-translate-y-3 text-left cursor-pointer overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-400/20 rounded-full blur-3xl group-hover:bg-blue-400/40 transition-all duration-500 group-hover:scale-150"></div>
-
-            <div className="relative z-10 flex flex-col flex-1">
-              {/* Icon */}
-              <div className="bg-gradient-to-br from-blue-400 to-indigo-600 text-white p-4 rounded-2xl shadow-lg shadow-blue-500/30 inline-flex self-start mb-8 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-500">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
-                </svg>
-              </div>
-
-              <h2 className="text-[26px] font-extrabold text-slate-800 mb-4 group-hover:bg-gradient-to-r group-hover:from-blue-600 group-hover:to-indigo-600 group-hover:bg-clip-text group-hover:text-transparent transition-all">
-                WhatsApp ChatBot
-              </h2>
-              
-              <p /* min-h, not a fixed h: the cards narrow at 4-up and a fixed height
-                 clipped the longer blurbs. The CTA row bottom-aligns via mt-auto, so
-                 this only needs to be a floor, not an exact match. */
-              className="text-slate-500 text-[15px] leading-relaxed mb-8 min-h-[65px] font-medium">
-                Intelligent clinical assistant for patients — book appointments, check doctor availability, and get health guidance.
-              </p>
-
-              <div className="space-y-4 mb-10">
-                {['AI-powered patient assistant', 'Appointment booking', 'Doctor availability'].map((feature, i) => (
-                  <div key={i} className="flex items-center gap-3 text-[14px] text-slate-600 font-semibold group-hover:text-slate-900 transition-colors">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-500 group-hover:text-white transition-colors duration-300">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    {feature}
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-auto flex items-center gap-2 text-blue-600 font-bold text-[15px] group-hover:text-blue-700 transition-colors">
-                Open WhatsApp ChatBot
-                <svg className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
-              </div>
-            </div>
-          </button>
-
-          {/* Doctors Chat Card */}
-          <button
-            id="card-doctors-chat"
-            onClick={() => navigate('/doctor')}
-            className="group relative bg-white/60 backdrop-blur-xl rounded-[2rem] p-8 flex flex-col border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_-15px_rgba(99,102,241,0.4)] transition-all duration-500 hover:-translate-y-3 text-left cursor-pointer overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-violet-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-400/20 rounded-full blur-3xl group-hover:bg-indigo-400/40 transition-all duration-500 group-hover:scale-150"></div>
-
-            <div className="relative z-10 flex flex-col flex-1">
-              {/* Icon */}
-              <div className="bg-gradient-to-br from-indigo-400 to-violet-600 text-white p-4 rounded-2xl shadow-lg shadow-indigo-500/30 inline-flex self-start mb-8 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-
-              <h2 className="text-[26px] font-extrabold text-slate-800 mb-4 group-hover:bg-gradient-to-r group-hover:from-indigo-600 group-hover:to-violet-600 group-hover:bg-clip-text group-hover:text-transparent transition-all">
-                Doctors Chat
-              </h2>
-
-              <p /* min-h, not a fixed h: the cards narrow at 4-up and a fixed height
-                 clipped the longer blurbs. The CTA row bottom-aligns via mt-auto, so
-                 this only needs to be a floor, not an exact match. */
-              className="text-slate-500 text-[15px] leading-relaxed mb-8 min-h-[65px] font-medium">
-                Ask your own patient records in plain language — trends, history and your surgery schedule, answered from the chart.
-              </p>
-
-              <div className="space-y-4 mb-10">
-                {['Chat over patient records', 'Trends & visit history', 'Ask by voice'].map((feature, i) => (
-                  <div key={i} className="flex items-center gap-3 text-[14px] text-slate-600 font-semibold group-hover:text-slate-900 transition-colors">
-                    <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-500 group-hover:text-white transition-colors duration-300">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    {feature}
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-auto flex items-center gap-2 text-indigo-600 font-bold text-[15px] group-hover:text-indigo-700 transition-colors">
-                Open Doctors Chat
-                <svg className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
-              </div>
-            </div>
-          </button>
 
         </div>
       </main>
