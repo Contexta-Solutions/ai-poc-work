@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { authFetch } from '../auth';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -164,7 +165,7 @@ const TemplateLibrary = ({ onBack, onUseSample }) => {
   const loadTemplates = () => {
     setTemplates(null);
     setLoadError(false);
-    fetch(`${API_URL}/api/templates`)
+    authFetch(`${API_URL}/api/templates`)
       .then(r => (r.ok ? r.json() : Promise.reject(new Error('bad status'))))
       .then(d => setTemplates(d.templates || []))
       .catch(() => setLoadError(true));
@@ -505,7 +506,7 @@ export default function VisitNotesApp() {
   // Doctor roster comes from the backend, so Visit Notes and the ChatBot can't
   // drift apart.
   useEffect(() => {
-    fetch(`${API_URL}/api/doctors`)
+    authFetch(`${API_URL}/api/doctors`)
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (d?.doctors?.length) setDoctors(d.doctors); })
       .catch(() => { /* offline: keep the typed-in default */ });
@@ -626,7 +627,7 @@ export default function VisitNotesApp() {
           // patients there speak English or Telugu).
           formData.append('language', 'en');
 
-          const res = await fetch(`${API_URL}/api/transcribe`, {
+          const res = await authFetch(`${API_URL}/api/transcribe`, {
             method: 'POST',
             body: formData,
           });
@@ -681,7 +682,7 @@ export default function VisitNotesApp() {
     if (!voiceNote.trim()) return;
     setIsAnalyzing(true);
     try {
-      const res = await fetch(`${API_URL}/api/parse-note`, {
+      const res = await authFetch(`${API_URL}/api/parse-note`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ voice_note: voiceNote })
@@ -724,7 +725,7 @@ export default function VisitNotesApp() {
     );
 
     try {
-      const res = await fetch(`${API_URL}/api/generate-pdf`, {
+      const res = await authFetch(`${API_URL}/api/generate-pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

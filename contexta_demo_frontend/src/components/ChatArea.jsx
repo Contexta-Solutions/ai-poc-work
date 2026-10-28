@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Send, Square, CheckCheck, Stethoscope, UserPlus, ArrowLeft } from 'lucide-react';
+import { authFetch } from '../auth';
 
 const formatMessage = (text) => {
   if (!text) return null;
@@ -92,7 +93,7 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
 
     setIsBotTyping(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/chat`, {
+      const response = await authFetch(`${BACKEND_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -157,7 +158,7 @@ export default function ChatArea({ messages, setMessages, onToggleInfo, isDarkMo
         // to Groq, so the API key never ships to the browser.)
 
         try {
-          const res = await fetch(`${BACKEND_URL}/api/transcribe`, {
+          const res = await authFetch(`${BACKEND_URL}/api/transcribe`, {
             method: "POST",
             body: formData
           });

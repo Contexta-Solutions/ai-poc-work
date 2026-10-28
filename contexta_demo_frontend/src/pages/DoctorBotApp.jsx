@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Square } from 'lucide-react';
+import { authFetch } from '../auth';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -346,7 +347,7 @@ const AssistantPanel = ({ doctor, className = '' }) => {
   // Warm the prompt cache while the doctor is still reading the chart, so the
   // first question reads a hot cache instead of paying the cold write.
   useEffect(() => {
-    fetch(`${API_URL}/api/doctor/warm`, { method: 'POST' }).catch(() => {});
+    authFetch(`${API_URL}/api/doctor/warm`, { method: 'POST' }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -364,7 +365,7 @@ const AssistantPanel = ({ doctor, className = '' }) => {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/api/doctor/ask`, {
+      const res = await authFetch(`${API_URL}/api/doctor/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: q, history }),
@@ -399,7 +400,7 @@ const AssistantPanel = ({ doctor, className = '' }) => {
         const fd = new FormData();
         fd.append('file', blob, 'audio.webm');
         try {
-          const res = await fetch(`${API_URL}/api/transcribe`, { method: 'POST', body: fd });
+          const res = await authFetch(`${API_URL}/api/transcribe`, { method: 'POST', body: fd });
           if (!res.ok) throw new Error(`Transcription failed (${res.status})`);
           const data = await res.json();
           const text = (data.text || '').trim();
@@ -564,7 +565,7 @@ export default function DoctorBotApp() {
   const patient = PATIENTS.find((p) => p.id === activeId);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/doctor/context`)
+    authFetch(`${API_URL}/api/doctor/context`)
       .then((r) => r.json())
       .then((d) => d.doctor && setDoctor(d.doctor))
       .catch(() => {});
