@@ -3,7 +3,7 @@ uvicorn
 pydantic
 fpdf2
 uharfbuzz
-anthropic
+anthropic>=2.8,<3
 python-dotenv
 httpx
 python-multipart

@@ -103,7 +103,6 @@ def translate_document(doc: dict, language: str) -> dict:
     response = _client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=8000,
-        temperature=0.0,
         system=f"You are a precise medical translator (English -> {target}). You output ONLY a valid JSON array of strings, never anything else.",
         messages=[{"role": "user", "content": prompt}],
     )

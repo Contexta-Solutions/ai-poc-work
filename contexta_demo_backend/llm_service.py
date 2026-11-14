@@ -147,7 +147,6 @@ def extract_clinical_data(voice_note: str) -> dict:
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1024,
-            temperature=0.0,
             system="You are a precise clinical schema JSON mapping instrument. Output ONLY valid JSON with no markdown formatting, no code fences, and no surrounding text.",
             messages=[
                 {"role": "user", "content": prompt}
